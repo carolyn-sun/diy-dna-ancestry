@@ -1,12 +1,12 @@
 """
-pca.py — PLINK PCA 主成分分析模块
+pca.py — PLINK PCA (principal component analysis)
 
-命令：
+Command:
   plink --bfile merged --pca 10 --out results/pca/pca
 
-输出：
-  pca.eigenvec   ← 各样本的主成分坐标（PC1~PC10）
-  pca.eigenval   ← 各主成分的特征值（方差贡献）
+Outputs:
+  pca.eigenvec  — per-sample PC coordinates (PC1–PC10)
+  pca.eigenval  — eigenvalues (variance explained per PC)
 """
 
 from __future__ import annotations
@@ -26,9 +26,9 @@ def _run_plink(args: list[str], step: str) -> None:
     console.print(f"  [dim]$ {' '.join(cmd)}[/dim]")
     result = subprocess.run(cmd, capture_output=True, text=True)
     if result.returncode != 0:
-        console.print(f"[red]PLINK {step} 失败（退出码 {result.returncode}）：[/red]")
+        console.print(f"[red]PLINK failed at '{step}' (exit {result.returncode}):[/red]")
         console.print(result.stderr or result.stdout)
-        raise RuntimeError(f"PLINK 步骤失败：{step}")
+        raise RuntimeError(f"PLINK step failed: {step}")
 
 
 def run_pca(
@@ -38,21 +38,21 @@ def run_pca(
     threads: int = 4,
 ) -> dict:
     """
-    跑 PLINK PCA。
+    Run PLINK PCA on a merged dataset.
 
     Args:
-        bed:    合并后的 BED 前缀
-        out_dir: 输出目录
-        n_pcs:  计算的主成分数量（默认 10）
-        threads: 线程数
+        bed:     Merged BED prefix
+        out_dir: Output directory
+        n_pcs:   Number of principal components to compute (default 10)
+        threads: Number of threads
 
     Returns:
-        dict，含 eigenvec / eigenval 文件路径，和解析好的 DataFrame
+        Dict containing eigenvec/eigenval file paths and parsed DataFrames
     """
     os.makedirs(out_dir, exist_ok=True)
     out_prefix = str(Path(out_dir) / "pca")
 
-    console.print(f"  [bold]计算前 {n_pcs} 个主成分[/bold]")
+    console.print(f"  [bold]Computing top {n_pcs} principal components[/bold]")
     _run_plink([
         "--bfile", bed,
         "--pca", str(n_pcs),
@@ -65,36 +65,34 @@ def run_pca(
     eigenval_path = out_prefix + ".eigenval"
 
     if not Path(eigenvec_path).exists():
-        raise FileNotFoundError(f"PCA 结果文件未生成：{eigenvec_path}")
+        raise FileNotFoundError(f"PCA output not found: {eigenvec_path}")
 
-    # 解析 .eigenvec
+    # Parse .eigenvec
     pc_cols = [f"PC{i}" for i in range(1, n_pcs + 1)]
     eigenvec_df = pd.read_csv(
         eigenvec_path, sep=r"\s+", header=None,
         names=["FID", "IID"] + pc_cols,
     )
 
-    # 解析 .eigenval（方差贡献率）
+    # Parse .eigenval (variance explained)
     eigenval_df = pd.read_csv(eigenval_path, header=None, names=["eigenval"])
     total_var = eigenval_df["eigenval"].sum()
     eigenval_df["var_pct"] = eigenval_df["eigenval"] / total_var * 100
 
-    # 打印方差贡献表
-    console.print(f"\n  {'PC':<6} {'方差贡献':<12} {'累计':<10}")
-    console.print(f"  {'─'*30}")
+    # Print variance-explained summary
+    console.print(f"\n  {'PC':<6} {'Var%':<12} {'Cumulative':<10}")
+    console.print(f"  {'─' * 32}")
     cumsum = 0.0
     for i, row in eigenval_df.head(5).iterrows():
         cumsum += row["var_pct"]
-        console.print(
-            f"  PC{i+1:<4} {row['var_pct']:>7.2f}%     {cumsum:>7.2f}%"
-        )
-    console.print(f"  {'─'*30}")
+        console.print(f"  PC{i+1:<4} {row['var_pct']:>7.2f}%     {cumsum:>7.2f}%")
+    console.print(f"  {'─' * 32}")
 
     n_user = (eigenvec_df["FID"] == "USER").sum()
     console.print(
-        f"\n  [green]✓[/green] PCA 完成："
-        f"{len(eigenvec_df)} 个样本（含 {n_user} 个用户样本），"
-        f"{n_pcs} 个主成分"
+        f"\n  [green]✓[/green] PCA done: "
+        f"{len(eigenvec_df)} samples ({n_user} user sample), "
+        f"{n_pcs} components"
     )
 
     return {

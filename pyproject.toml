@@ -1,6 +1,6 @@
 [build-system]
 requires = ["setuptools>=68", "wheel"]
-build-backend = "setuptools.backends.legacy:build"
+build-backend = "setuptools.build_meta"
 
 [project]
 name = "diy-dna-ancestry"
@@ -18,8 +18,8 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Bio-Informatics",
 ]
 
-# NOTE: 运行时依赖由 environment.yml（conda）管理，
-#       此处仅声明 pip install -e . 所需的最小集合。
+# Runtime deps are managed by environment.yml (conda);
+# only the minimum set needed for `pip install -e .` is declared here.
 dependencies = [
     "numpy>=1.26",
     "pandas>=2.1",

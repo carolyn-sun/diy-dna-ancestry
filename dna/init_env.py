@@ -1,11 +1,11 @@
 """
-init_env.py — 环境检查模块
+init_env.py — Environment check module
 
-检测项：
-  - Python 版本（需要 3.11+）
-  - conda 是否激活
-  - PLINK 是否可用
-  - ADMIXTURE 是否可用
+Checks:
+  - Python version (>= 3.11)
+  - Whether a conda environment is active
+  - Whether PLINK is available
+  - Whether ADMIXTURE is available
 """
 
 from __future__ import annotations
@@ -13,7 +13,7 @@ from __future__ import annotations
 import shutil
 import subprocess
 import sys
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 from rich.console import Console
 from rich.table import Table
@@ -23,7 +23,7 @@ console = Console()
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# 数据结构
+# Data structures
 # ──────────────────────────────────────────────────────────────────────────────
 
 @dataclass
@@ -36,7 +36,7 @@ class ToolStatus:
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# 单项检测
+# Individual checks
 # ──────────────────────────────────────────────────────────────────────────────
 
 def _check_python() -> ToolStatus:
@@ -48,33 +48,33 @@ def _check_python() -> ToolStatus:
         ok=ok,
         version=ver,
         path=sys.executable,
-        note="" if ok else "需要 Python 3.11+，请更新",
+        note="" if ok else "Python 3.11+ required — please upgrade",
     )
 
 
 def _check_conda() -> ToolStatus:
-    """检查当前是否在 conda 环境中运行。"""
+    """Check whether we are running inside a conda environment."""
     import os
     conda_env = os.environ.get("CONDA_DEFAULT_ENV", "")
     conda_prefix = os.environ.get("CONDA_PREFIX", "")
     ok = bool(conda_env and conda_prefix)
     return ToolStatus(
-        name="conda 环境",
+        name="conda env",
         ok=ok,
-        version=conda_env or "(未激活)",
+        version=conda_env or "(not active)",
         path=conda_prefix,
-        note="" if ok else "请先运行：conda activate dna-ancestry",
+        note="" if ok else "Run: conda activate dna-ancestry",
     )
 
 
 def _check_tool(name: str, version_flag: str = "--version") -> ToolStatus:
-    """检查外部二进制工具。"""
+    """Check whether an external binary is available."""
     path = shutil.which(name)
     if path is None:
         return ToolStatus(
             name=name.upper(),
             ok=False,
-            note=f"{name} 未在 PATH 中找到，请确认 conda 环境已激活",
+            note=f"{name} not found in PATH — make sure the conda env is active",
         )
     try:
         result = subprocess.run(
@@ -90,11 +90,11 @@ def _check_tool(name: str, version_flag: str = "--version") -> ToolStatus:
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# 汇总检查
+# Aggregate check
 # ──────────────────────────────────────────────────────────────────────────────
 
 def run_check(verbose: bool = True) -> bool:
-    """运行所有环境检查，返回 True 表示全部通过。"""
+    """Run all environment checks. Returns True if all pass."""
     statuses: list[ToolStatus] = [
         _check_python(),
         _check_conda(),
@@ -109,13 +109,13 @@ def run_check(verbose: bool = True) -> bool:
 
     if verbose:
         if all_ok:
-            console.print("\n[bold green]✓ 所有工具就绪，可以开始分析！[/bold green]")
+            console.print("\n[bold green]All tools ready — you can start the analysis![/bold green]")
         else:
-            console.print("\n[bold yellow]⚠  部分工具未就绪，请参考上表中的提示。[/bold yellow]")
+            console.print("\n[bold yellow]Some tools are missing. See the notes above.[/bold yellow]")
             console.print(
-                "\n安装指南："
-                "\n  [cyan]conda activate dna-ancestry[/cyan]"
-                "\n  [cyan]conda install -c bioconda -c conda-forge plink admixture[/cyan]"
+                "\nInstallation hint:\n"
+                "  [cyan]conda activate dna-ancestry[/cyan]\n"
+                "  [cyan]conda install -c bioconda -c conda-forge plink admixture[/cyan]"
             )
 
     return all_ok
@@ -123,20 +123,20 @@ def run_check(verbose: bool = True) -> bool:
 
 def _print_table(statuses: list[ToolStatus]) -> None:
     table = Table(
-        title="🧬 diy-dna-ancestry 环境检查",
+        title="🧬 diy-dna-ancestry environment check",
         box=box.ROUNDED,
         show_header=True,
         header_style="bold cyan",
         border_style="dim",
     )
-    table.add_column("工具",    style="bold", min_width=14)
-    table.add_column("状态",    justify="center", min_width=6)
-    table.add_column("版本",    min_width=20)
-    table.add_column("路径",    min_width=30)
-    table.add_column("备注",    style="dim")
+    table.add_column("Tool",    style="bold", min_width=14)
+    table.add_column("Status",  justify="center", min_width=6)
+    table.add_column("Version", min_width=20)
+    table.add_column("Path",    min_width=30)
+    table.add_column("Note",    style="dim")
 
     for s in statuses:
-        icon = "[green]✓[/green]" if s.ok else "[red]✗[/red]"
+        icon = "[green]OK[/green]" if s.ok else "[red]MISSING[/red]"
         table.add_row(
             s.name,
             icon,

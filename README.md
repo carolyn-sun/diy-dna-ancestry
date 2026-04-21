@@ -96,3 +96,13 @@ pytest tests/ -v
 - [gnomAD](https://gnomad.broadinstitute.org/)
 - [PLINK 1.9](https://www.cog-genomics.org/plink/1.9/)
 - [ADMIXTURE 1.3](https://dalexander.github.io/admixture/)
+
+## Disclaimer
+
+1. This tool isn't for medical purposes, and not reliable for any medical decisions.
+2. This tool may present imprecise results due to the limited reference panel.
+3. This tool doesn't collect or store any personal data. All the analysis is done locally.
+
+## Further steps
+
+For the detailed gene mutation analysis, you can play with [OpenCRAVAT](https://opencravat.org/).

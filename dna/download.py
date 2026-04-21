@@ -1,18 +1,18 @@
 """
-download.py — 下载 HGDP 参考面板
+download.py — Download the HGDP reference panel
 
-默认数据源：
-  Sanger Institute FTP — HGDP_938 LD 剪枝精简版
-  （已预处理：938 样本 × ~50k 独立 SNPs，PLINK BED/BIM/FAM 格式）
+Default source:
+  Sanger Institute FTP — HGDP_938 LD-pruned subset
+  (pre-processed: 938 samples × ~50k independent SNPs, PLINK BED/BIM/FAM format)
 
-备用：
-  如 Sanger FTP 不可用，自动切换至 gnomAD Google Cloud 镜像。
+Fallback:
+  gnomAD Google Cloud mirror (auto-switched if the primary URL fails).
 
-文件清单（约 60–120 MB 合计）：
+Files downloaded (~60–120 MB total):
   hgdp_pruned.bed
   hgdp_pruned.bim
   hgdp_pruned.fam
-  hgdp_pop_labels.tsv   ← 样本 ID ↔ 人群 / 地理区域映射表
+  hgdp_pop_labels.tsv   — sample ID ↔ population / continent mapping
 """
 
 from __future__ import annotations
@@ -32,19 +32,19 @@ from rich.progress import (
 console = Console()
 
 # ──────────────────────────────────────────────────────────────────────────────
-# 数据源配置
+# Data source configuration
 # ──────────────────────────────────────────────────────────────────────────────
 
-# 注：此处使用精简版的 HGDP 面板（Bergström et al. 2020, Science）
-# 由 gnomAD / Broad Institute 公开托管的 LD 剪枝子集
-# 参考：https://gnomad.broadinstitute.org/downloads#v3-hgdp-1kg
+# HGDP panel (Bergström et al. 2020, Science) — LD-pruned subset
+# publicly hosted by gnomAD / Broad Institute
+# https://gnomad.broadinstitute.org/downloads#v3-hgdp-1kg
 
 _BASE_URL_PRIMARY = (
     "https://storage.googleapis.com/gcp-public-data--gnomad"
     "/release/3.1/secondary_analysis/hgdp_1kg/pca_hgdp_subset"
 )
 
-# 元数据/标签表（由本项目维护的精简版，包含人群、大洲信息）
+# Population label table (lightweight version maintained by this project)
 _LABELS_URL = (
     "https://raw.githubusercontent.com/armartin/ancestry_pipeline"
     "/master/hgdp_labels.txt"
@@ -55,35 +55,34 @@ class FileSpec(NamedTuple):
     remote_url: str
     local_name: str
     description: str
-    md5: str | None = None  # 可选校验
+    md5: str | None = None  # optional integrity check
 
 
-# 下载文件列表
 _FILES: list[FileSpec] = [
     FileSpec(
         remote_url=f"{_BASE_URL_PRIMARY}.bed",
         local_name="hgdp_pruned.bed",
-        description="HGDP 参考面板 BED（二进制基因型）",
+        description="HGDP reference panel BED (binary genotypes)",
     ),
     FileSpec(
         remote_url=f"{_BASE_URL_PRIMARY}.bim",
         local_name="hgdp_pruned.bim",
-        description="HGDP 参考面板 BIM（SNP 信息）",
+        description="HGDP reference panel BIM (SNP info)",
     ),
     FileSpec(
         remote_url=f"{_BASE_URL_PRIMARY}.fam",
         local_name="hgdp_pruned.fam",
-        description="HGDP 参考面板 FAM（样本信息）",
+        description="HGDP reference panel FAM (sample info)",
     ),
     FileSpec(
         remote_url=_LABELS_URL,
         local_name="hgdp_pop_labels.tsv",
-        description="HGDP 样本 → 人群 / 大洲 标签表",
+        description="HGDP sample → population / continent label table",
     ),
 ]
 
 # ──────────────────────────────────────────────────────────────────────────────
-# 核心下载函数
+# Core download function
 # ──────────────────────────────────────────────────────────────────────────────
 
 def _md5_file(path: Path) -> str:
@@ -101,12 +100,12 @@ def _download_file(
     force: bool = False,
     expected_md5: str | None = None,
 ) -> bool:
-    """下载单个文件，显示进度条。返回 True 表示成功。"""
+    """Download a single file with a progress bar. Returns True on success."""
     if dest.exists() and not force:
         if expected_md5 and _md5_file(dest) != expected_md5:
-            console.print(f"  [yellow]MD5 校验失败，重新下载：{dest.name}[/yellow]")
+            console.print(f"  [yellow]MD5 mismatch — re-downloading: {dest.name}[/yellow]")
         else:
-            console.print(f"  [dim]已存在，跳过：{dest.name}[/dim]")
+            console.print(f"  [dim]Already exists, skipping: {dest.name}[/dim]")
             return True
 
     try:
@@ -133,59 +132,57 @@ def _download_file(
         return True
 
     except requests.RequestException as exc:
-        console.print(f"  [red]✗ 下载失败：{dest.name}[/red]")
+        console.print(f"  [red]✗ Download failed: {dest.name}[/red]")
         console.print(f"    {exc}")
         if dest.exists():
-            dest.unlink()  # 删除不完整的文件
+            dest.unlink()  # remove partial file
         return False
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# 公开入口
+# Public entry point
 # ──────────────────────────────────────────────────────────────────────────────
 
 def download_hgdp(out_dir: str = "data/hgdp", force: bool = False) -> Path:
     """
-    下载 HGDP 参考面板到 out_dir。
+    Download the HGDP reference panel to out_dir.
 
     Args:
-        out_dir:  本地存储目录
-        force:    True 则强制覆盖已有文件
+        out_dir:  Local directory to store files
+        force:    If True, overwrite existing files
 
     Returns:
-        参考面板 BED 文件的路径（不含扩展名前缀）
+        Path prefix of the reference panel BED (without extension)
 
     Raises:
-        RuntimeError: 如果核心文件下载失败
+        RuntimeError: If any core file fails to download
     """
     dest_dir = Path(out_dir)
     dest_dir.mkdir(parents=True, exist_ok=True)
 
-    console.print(f"\n[bold cyan]📥 下载 HGDP 参考面板[/bold cyan]")
-    console.print(f"  目标目录：[dim]{dest_dir.resolve()}[/dim]\n")
+    console.print(f"\n[bold cyan]Downloading HGDP reference panel[/bold cyan]")
+    console.print(f"  Destination: [dim]{dest_dir.resolve()}[/dim]\n")
 
     failed: list[str] = []
     for spec in _FILES:
         dest = dest_dir / spec.local_name
         ok = _download_file(
-            url=spec.remote_url,
-            dest=dest,
-            description=spec.description,
-            force=force,
-            expected_md5=spec.md5,
+            url=spec.remote_url, dest=dest, description=spec.description,
+            force=force, expected_md5=spec.md5,
         )
         if not ok and spec.local_name.endswith((".bed", ".bim", ".fam")):
             failed.append(spec.local_name)
 
     if failed:
         raise RuntimeError(
-            f"以下关键文件下载失败：{failed}\n"
-            "请检查网络连接，或手动下载后放置到：" + str(dest_dir.resolve())
+            f"The following core files failed to download: {failed}\n"
+            "Check your network connection, or manually place the files in: "
+            + str(dest_dir.resolve())
         )
 
     ref_prefix = dest_dir / "hgdp_pruned"
-    console.print(f"\n[bold green]✓ HGDP 参考面板就绪[/bold green]")
-    console.print(f"  前缀：[cyan]{ref_prefix}[/cyan]")
-    console.print("  包含文件：.bed / .bim / .fam / hgdp_pop_labels.tsv\n")
+    console.print(f"\n[bold green]HGDP reference panel ready[/bold green]")
+    console.print(f"  Prefix: [cyan]{ref_prefix}[/cyan]")
+    console.print("  Files: .bed / .bim / .fam / hgdp_pop_labels.tsv\n")
 
     return ref_prefix

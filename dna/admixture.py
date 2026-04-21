@@ -1,10 +1,9 @@
 """
-admixture.py — ADMIXTURE 无监督聚类模块
+admixture.py — ADMIXTURE unsupervised clustering
 
-流程：
-  对每个 K 值运行 admixture --cv merged.bed K
-  解析 .Q 文件（个体祖源比例）和 CV error
-  输出结果字典供 plot.py 使用
+Runs `admixture --cv merged.bed K` for each requested K value,
+parses the .Q file (individual ancestry proportions) and CV error,
+and returns a results dict for use by plot.py.
 """
 
 from __future__ import annotations
@@ -22,70 +21,60 @@ console = Console()
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# 核心函数
+# Core functions
 # ──────────────────────────────────────────────────────────────────────────────
 
-def _run_admixture_k(
-    bed: str,
-    k: int,
-    out_dir: str,
-    threads: int,
-) -> dict:
+def _run_admixture_k(bed: str, k: int, out_dir: str, threads: int) -> dict:
     """
-    跑单个 K 值的 ADMIXTURE。
+    Run ADMIXTURE for a single K value.
 
-    Returns dict with keys: k, q_file, cv_error, log_file
+    Returns a dict with keys: k, q_file, cv_error, log_file
     """
     os.makedirs(out_dir, exist_ok=True)
 
     bed_path = Path(bed + ".bed")
     log_path = Path(out_dir) / f"admixture_K{k}.log"
-    q_dest   = Path(out_dir) / f"merged.{k}.Q"
-    p_dest   = Path(out_dir) / f"merged.{k}.P"
 
-    # ADMIXTURE 会在当前目录输出 .Q 和 .P，需要 chdir
     cmd = [
         "admixture",
-        "--cv",                  # 交叉验证（cross-validation）
-        "-j", str(threads),      # 线程数
-        str(bed_path.resolve()), # BED 文件完整路径
+        "--cv",
+        "-j", str(threads),
+        str(bed_path.resolve()),
         str(k),
     ]
 
     console.print(f"  [dim]$ {' '.join(cmd)}[/dim]")
-    console.print(f"  [bold]运行 K={k}[/bold]（日志：{log_path.name}）")
+    console.print(f"  [bold]Running K={k}[/bold]  (log: {log_path.name})")
 
     with open(log_path, "w") as log_fh:
         proc = subprocess.run(
             cmd,
             stdout=log_fh,
             stderr=subprocess.STDOUT,
-            cwd=out_dir,          # 输出文件将落在 out_dir
+            cwd=out_dir,  # ADMIXTURE writes .Q/.P into cwd
         )
 
     if proc.returncode != 0:
         raise RuntimeError(
-            f"ADMIXTURE K={k} 失败（退出码 {proc.returncode}）\n"
-            f"请查看日志：{log_path}"
+            f"ADMIXTURE K={k} failed (exit {proc.returncode})\n"
+            f"See log: {log_path}"
         )
 
-    # ADMIXTURE 输出的文件名基于输入文件名（去掉路径）
-    stem = bed_path.stem  # e.g. "merged"
+    stem  = bed_path.stem  # e.g. "merged"
     raw_q = Path(out_dir) / f"{stem}.{k}.Q"
     raw_p = Path(out_dir) / f"{stem}.{k}.P"
 
     if not raw_q.exists():
         raise FileNotFoundError(
-            f"ADMIXTURE 未生成 .Q 文件：{raw_q}\n"
-            f"请查看日志：{log_path}"
+            f"ADMIXTURE did not produce a .Q file: {raw_q}\n"
+            f"See log: {log_path}"
         )
 
-    # 解析 CV error
     cv_error = _parse_cv_error(log_path)
     if cv_error is not None:
-        console.print(f"  [green]✓[/green] K={k} 完成，CV error = {cv_error:.6f}")
+        console.print(f"  [green]✓[/green] K={k} done, CV error = {cv_error:.6f}")
     else:
-        console.print(f"  [green]✓[/green] K={k} 完成（CV error 未解析）")
+        console.print(f"  [green]✓[/green] K={k} done (CV error not parsed)")
 
     return {
         "k": k,
@@ -97,7 +86,7 @@ def _run_admixture_k(
 
 
 def _parse_cv_error(log_path: Path) -> float | None:
-    """从 ADMIXTURE 日志解析 CV error 值。"""
+    """Parse the CV error value from an ADMIXTURE log file."""
     pattern = re.compile(r"CV error \(K=\d+\):\s*([\d.]+)")
     try:
         with open(log_path) as f:
@@ -111,16 +100,16 @@ def _parse_cv_error(log_path: Path) -> float | None:
 
 
 def _print_cv_table(results: list[dict]) -> None:
-    """打印 CV error 汇总表。"""
+    """Print a CV error summary table."""
     table = Table(
         title="ADMIXTURE Cross-Validation Error",
         box=box.SIMPLE_HEAVY,
         show_header=True,
         header_style="bold cyan",
     )
-    table.add_column("K", justify="center", style="bold")
+    table.add_column("K",        justify="center", style="bold")
     table.add_column("CV Error", justify="right")
-    table.add_column("推荐", justify="center")
+    table.add_column("Best",     justify="center")
 
     valid = [r for r in results if r["cv_error"] is not None]
     if not valid:
@@ -130,15 +119,15 @@ def _print_cv_table(results: list[dict]) -> None:
 
     for r in results:
         cv_str = f"{r['cv_error']:.6f}" if r["cv_error"] is not None else "—"
-        rec    = "★ 最低" if r["k"] == best_k else ""
-        table.add_row(str(r["k"]), cv_str, rec)
+        best   = "★ lowest" if r["k"] == best_k else ""
+        table.add_row(str(r["k"]), cv_str, best)
 
     console.print()
     console.print(table)
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# 公开入口
+# Public entry point
 # ──────────────────────────────────────────────────────────────────────────────
 
 def run_admixture(
@@ -148,22 +137,22 @@ def run_admixture(
     threads: int = 4,
 ) -> dict[int, dict]:
     """
-    对多个 K 值运行 ADMIXTURE。
+    Run ADMIXTURE for multiple K values.
 
     Args:
-        bed:     合并后的 BED 前缀（不含 .bed 后缀）
-        ks:      K 值列表，如 [3, 5]
-        out_dir: 输出目录
-        threads: 线程数
+        bed:     Merged BED prefix (without .bed extension)
+        ks:      List of K values, e.g. [3, 5]
+        out_dir: Output directory
+        threads: Number of threads
 
     Returns:
-        dict，键为 K 值，值为包含 q_file / cv_error 等的字典
+        Dict mapping K → result dict (q_file, cv_error, log_file, ...)
     """
     os.makedirs(out_dir, exist_ok=True)
 
     all_results: list[dict] = []
     for k in sorted(ks):
-        console.print(f"\n  [cyan]── ADMIXTURE K={k} ────────────────────────[/cyan]")
+        console.print(f"\n  [cyan]── ADMIXTURE K={k} ──────────────────────────────[/cyan]")
         result = _run_admixture_k(bed=bed, k=k, out_dir=out_dir, threads=threads)
         all_results.append(result)
 
