@@ -169,37 +169,90 @@ def merge_with_hgdp(
     fam_df["fid"] = "USER"
     fam_df.to_csv(fam_path, sep="\t", header=False, index=False)
 
-    # ── Step 2d: bmerge ───────────────────────────────────────────────────────
+    # ── Step 2d: bmerge (up to 3 passes) ─────────────────────────────────────
+    # Pass 1: try merging as-is
+    # Pass 2: if missnp found, flip those SNPs in the user data and retry
+    # Pass 3: if missnp still remain after flipping, exclude them and merge again
     console.print("  [bold]2d[/bold] bmerge: user data + HGDP")
     _run_plink([
         "--bfile", ref_common,
         "--bmerge", user_common + ".bed", user_common + ".bim", user_common + ".fam",
         "--make-bed", "--out", merged_prefix,
         "--allow-no-sex",
-    ], step="bmerge")
+    ], step="bmerge pass 1")
 
-    # Handle strand flips
     missnp_path = merged_prefix + "-merge.missnp"
     if Path(missnp_path).exists():
-        console.print("  [yellow]Strand-flip SNPs detected — correcting...[/yellow]")
+        n_missnp = sum(1 for _ in open(missnp_path))
+        console.print(
+            f"  [yellow]Strand-flip SNPs detected ({n_missnp:,}) — flipping and retrying...[/yellow]"
+        )
 
         user_flip = str(Path(out_dir) / "user_flipped")
         _run_plink([
             "--bfile", user_common,
             "--flip", missnp_path,
             "--make-bed", "--out", user_flip,
+            "--allow-no-sex",
         ], step="strand flip")
+
+        # Remove stale missnp file before pass 2
+        Path(missnp_path).unlink(missing_ok=True)
 
         _run_plink([
             "--bfile", ref_common,
             "--bmerge", user_flip + ".bed", user_flip + ".bim", user_flip + ".fam",
             "--make-bed", "--out", merged_prefix,
             "--allow-no-sex",
-        ], step="re-merge after flip")
+        ], step="bmerge pass 2")
+
+        # If missnp still exists after flipping, those are ambiguous SNPs
+        # (A/T or C/G strand-ambiguous) that cannot be resolved — exclude them
+        if Path(missnp_path).exists():
+            n_remaining = sum(1 for _ in open(missnp_path))
+            console.print(
+                f"  [yellow]{n_remaining:,} ambiguous SNPs still unresolved — excluding them[/yellow]"
+            )
+
+            user_clean = str(Path(out_dir) / "user_clean")
+            _run_plink([
+                "--bfile", user_flip,
+                "--exclude", missnp_path,
+                "--make-bed", "--out", user_clean,
+                "--allow-no-sex",
+            ], step="exclude ambiguous SNPs")
+
+            ref_clean = str(Path(out_dir) / "ref_clean")
+            _run_plink([
+                "--bfile", ref_common,
+                "--exclude", missnp_path,
+                "--make-bed", "--out", ref_clean,
+                "--allow-no-sex",
+            ], step="exclude ambiguous SNPs from ref")
+
+            Path(missnp_path).unlink(missing_ok=True)
+
+            _run_plink([
+                "--bfile", ref_clean,
+                "--bmerge", user_clean + ".bed", user_clean + ".bim", user_clean + ".fam",
+                "--make-bed", "--out", merged_prefix,
+                "--allow-no-sex",
+            ], step="bmerge pass 3")
 
     from dna.qc import _count_samples, _count_variants
     n_sam = _count_samples(merged_prefix)
     n_snp = _count_variants(merged_prefix)
+
+    if n_sam == 0 or n_snp == 0:
+        raise RuntimeError(
+            f"Merge produced an empty dataset ({n_sam} samples, {n_snp} SNPs).\n"
+            "This usually means all SNPs were excluded during strand-flip resolution.\n"
+            "Possible causes:\n"
+            "  • Genome build mismatch (hg19 vs hg38) — positions don't truly overlap\n"
+            "  • The reference panel HGDP BIM uses a different allele coding\n"
+            "Check results/work/merged.log for details."
+        )
+
     console.print(
         f"  [green]✓[/green] Merged: {n_sam} samples "
         f"({n_sam - 1} HGDP reference + 1 user), {n_snp:,} SNPs"
