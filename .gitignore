@@ -1,0 +1,44 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Virtual environment
+.venv/
+venv/
+env/
+
+# Data directories (large binary files, runtime downloads)
+data/
+results/
+
+# PLINK temporary files
+*.nosex
+*.log
+*.nof
+*.prune.in
+*.prune.out
+
+# ADMIXTURE output (can be large)
+*.Q
+*.P
+*.Q_se
+*.P_se
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Pytest
+.pytest_cache/
+.coverage
+htmlcov/
