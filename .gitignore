@@ -1,44 +1,84 @@
-# Python
+# ── Python ───────────────────────────────────────────────────────────────────
 __pycache__/
 *.py[cod]
+*.pyo
+*.pyd
 *.egg-info/
+*.egg
 dist/
 build/
 .eggs/
+pip-wheel-metadata/
+MANIFEST
 
-# Virtual environment
+# ── Virtual environments ──────────────────────────────────────────────────────
 .venv/
 venv/
 env/
+# Note: conda environments live outside the repo (named env via environment.yml)
 
-# Data directories (large binary files, runtime downloads)
+# ── Genomics data ─────────────────────────────────────────────────────────────
+# Large binary / runtime-downloaded files; never committed
 data/
 results/
 
-# PLINK temporary files
+# PLINK intermediate files
+*.bed
+*.bim
+*.fam
 *.nosex
-*.log
 *.nof
+*.hh
 *.prune.in
 *.prune.out
+*.clst
+*.mdist
+*.mdist.id
+*.genome
+*.log
 
-# ADMIXTURE output (can be large)
+# ADMIXTURE output
 *.Q
 *.P
 *.Q_se
 *.P_se
+admixture_K*.log
 
-# OS
-.DS_Store
-Thumbs.db
+# VCF / BCF (user input, often large)
+*.vcf
+*.vcf.gz
+*.bcf
+*.bcf.gz
+*.tbi
+*.csi
 
-# Editor
+# Archives downloaded during setup
+*.tar.gz
+*.tar.bz2
+*.zip
+
+# ── Test artefacts ────────────────────────────────────────────────────────────
+.pytest_cache/
+.coverage
+htmlcov/
+coverage.xml
+*.cover
+
+# ── IDE / Editor ──────────────────────────────────────────────────────────────
 .idea/
 .vscode/
 *.swp
 *.swo
+*~
+.history/
 
-# Pytest
-.pytest_cache/
-.coverage
-htmlcov/
+# ── macOS ─────────────────────────────────────────────────────────────────────
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# ── Misc ──────────────────────────────────────────────────────────────────────
+*.bak
+*.tmp
+*.orig
