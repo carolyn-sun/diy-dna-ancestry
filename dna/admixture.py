@@ -28,10 +28,15 @@ def _run_admixture_k(bed: str, k: int, out_dir: str, threads: int) -> dict:
     """
     Run ADMIXTURE for a single K value.
 
-    ADMIXTURE looks for .bim/.fam in the same directory as the .bed file and
-    writes .Q/.P into the working directory.  We therefore run it with
-    cwd = bed_dir (so it finds the companion files), then move the outputs
-    to out_dir where the rest of the pipeline expects them.
+    ADMIXTURE 1.3.0 requires:
+      - Chromosomes in .bim must be plain integers 1-22 (no 'chr' prefix, no 0)
+      - .bim/.fam must be in the same directory as .bed
+      - .Q/.P are written to the working directory
+
+    We therefore:
+      1. Re-export the BED through PLINK (--chr 1-22) to guarantee numeric chrs
+      2. Run ADMIXTURE from that directory using the filename only
+      3. Move outputs to out_dir
 
     Returns a dict with keys: k, q_file, cv_error, log_file
     """
@@ -40,18 +45,54 @@ def _run_admixture_k(bed: str, k: int, out_dir: str, threads: int) -> dict:
     os.makedirs(out_dir, exist_ok=True)
 
     bed_path = Path(bed + ".bed").resolve()
-    bed_dir  = bed_path.parent          # directory containing .bed/.bim/.fam
+    bed_dir  = bed_path.parent
     out_path = Path(out_dir).resolve()
     log_path = out_path / f"admixture_K{k}.log"
-    stem     = bed_path.stem            # e.g. "merged"
 
-    # ADMIXTURE is invoked from bed_dir so it can locate .bim/.fam.
-    # Use just the filename (no path prefix) so it searches in cwd.
+    # ── Step: re-export through PLINK to guarantee ADMIXTURE-compatible format ──
+    # ADMIXTURE 1.3.0 silently rejects BED files whose .bim has non-numeric
+    # chromosome codes (chr1, 0, MT, …) and exits 255 with "Usage".
+    clean_prefix = str(bed_dir / "admix_input")
+    plink_reexport = [
+        "plink",
+        "--bfile", bed_path.stem,
+        "--chr", "1-22",          # keep only autosomes with numeric codes
+        "--make-bed",
+        "--out", "admix_input",
+        "--allow-no-sex",
+        "--silent",
+    ]
+    console.print(f"  [dim]Preparing ADMIXTURE input (PLINK re-export)...[/dim]")
+    prep = subprocess.run(
+        plink_reexport,
+        capture_output=True,
+        text=True,
+        cwd=str(bed_dir),
+    )
+    if prep.returncode not in (0, 3):
+        raise RuntimeError(
+            f"PLINK re-export for ADMIXTURE failed (exit {prep.returncode}):\n"
+            + (prep.stderr or prep.stdout)
+        )
+
+    # Print first 3 lines of .bim for diagnosis
+    bim_preview = Path(clean_prefix + ".bim")
+    if bim_preview.exists():
+        with open(bim_preview) as bf:
+            preview_lines = [bf.readline().rstrip() for _ in range(3)]
+        console.print(
+            f"  [dim].bim preview (chr / snp / cm / pos / a1 / a2): "
+            + " | ".join(preview_lines) + "[/dim]"
+        )
+
+    stem = "admix_input"
+
+    # ── Run ADMIXTURE ────────────────────────────────────────────────────────
     cmd = [
         "admixture",
         "--cv",
         "-j", str(threads),
-        bed_path.name,
+        f"{stem}.bed",   # filename only; cwd is bed_dir
         str(k),
     ]
 
@@ -63,7 +104,7 @@ def _run_admixture_k(bed: str, k: int, out_dir: str, threads: int) -> dict:
             cmd,
             stdout=log_fh,
             stderr=subprocess.STDOUT,
-            cwd=str(bed_dir),  # ← run from BED directory; .Q/.P written here
+            cwd=str(bed_dir),
         )
 
     if proc.returncode != 0:
@@ -83,11 +124,11 @@ def _run_admixture_k(bed: str, k: int, out_dir: str, threads: int) -> dict:
     for ext in (f".{k}.Q", f".{k}.P"):
         src = bed_dir / f"{stem}{ext}"
         if src.exists():
-            dst = out_path / src.name
+            dst = out_path / f"merged{ext}"   # rename to 'merged' for plot.py
             shutil.move(str(src), str(dst))
 
-    raw_q = out_path / f"{stem}.{k}.Q"
-    raw_p = out_path / f"{stem}.{k}.P"
+    raw_q = out_path / f"merged.{k}.Q"
+    raw_p = out_path / f"merged.{k}.P"
 
     if not raw_q.exists():
         raise FileNotFoundError(
