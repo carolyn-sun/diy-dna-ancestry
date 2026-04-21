@@ -40,11 +40,53 @@ def _load_bim(bim_path: str) -> pd.DataFrame:
     )
 
 
-def _common_snps(user_bim: str, ref_bim: str) -> set[str]:
-    """Return the set of SNP IDs shared by both BIM files."""
+def _align_snp_ids(user_bim: str, ref_bim: str) -> set[str]:
+    """Return common SNP IDs, with automatic fallback to chr:pos matching.
+
+    Some VCFs use rsIDs while the reference panel uses 'chr:pos' IDs (or vice
+    versa).  When direct name matching yields fewer than 100 hits we fall back
+    to matching on (chromosome, base-pair position).  Matched user BIM entries
+    are then *rewritten in place* to use the reference panel's SNP IDs so that
+    downstream --extract calls work correctly.
+    """
     user_df = _load_bim(user_bim)
     ref_df  = _load_bim(ref_bim)
-    return set(user_df["snp"]) & set(ref_df["snp"])
+
+    # ── Try direct SNP-ID match first ────────────────────────────────────────
+    common_ids = set(user_df["snp"]) & set(ref_df["snp"])
+    if len(common_ids) >= 100:
+        return common_ids
+
+    # ── Fallback: match by (chrom, pos) ──────────────────────────────────────
+    console.print(
+        f"    [yellow]Only {len(common_ids)} SNPs matched by ID; "
+        "falling back to chromosome:position matching "
+        "(SNP ID format mismatch between VCF and reference panel)[/yellow]"
+    )
+
+    # Build a (chrom, pos) → ref_snp_id lookup
+    # Normalise chromosome labels: strip leading 'chr' for comparison
+    ref_df["_chrom_norm"] = ref_df["chrom"].astype(str).str.lstrip("chr")
+    ref_df["_key"] = ref_df["_chrom_norm"] + ":" + ref_df["pos"].astype(str)
+    key_to_ref_snp: dict[str, str] = dict(zip(ref_df["_key"], ref_df["snp"]))
+
+    user_df["_chrom_norm"] = user_df["chrom"].astype(str).str.lstrip("chr")
+    user_df["_key"] = user_df["_chrom_norm"] + ":" + user_df["pos"].astype(str)
+    user_df["_new_snp"] = user_df["_key"].map(key_to_ref_snp)
+
+    matched = user_df[user_df["_new_snp"].notna()].copy()
+    if matched.empty:
+        return set()
+
+    # Rewrite the user BIM so SNP IDs match the reference panel
+    user_df.loc[matched.index, "snp"] = matched["_new_snp"]
+    user_df[["chrom", "snp", "cm", "pos", "a1", "a2"]].to_csv(
+        user_bim, sep="\t", header=False, index=False
+    )
+    console.print(
+        f"    SNP IDs remapped via chr:pos — {len(matched):,} variants aligned"
+    )
+    return set(matched["_new_snp"])
 
 
 def merge_with_hgdp(
@@ -78,12 +120,20 @@ def merge_with_hgdp(
 
     # ── Step 2a: Find common SNPs ─────────────────────────────────────────────
     console.print("  [bold]2a[/bold] Computing common SNPs")
-    common = _common_snps(user_bed + ".bim", ref_prefix + ".bim")
+    common = _align_snp_ids(user_bed + ".bim", ref_prefix + ".bim")
     console.print(f"    User × HGDP common SNPs: {len(common):,}")
 
+    if len(common) == 0:
+        raise RuntimeError(
+            "No common SNPs found between your VCF and the HGDP reference panel.\n"
+            "Possible causes:\n"
+            "  • Genome build mismatch — your VCF may be hg38 while HGDP panel is hg19 (or vice versa)\n"
+            "  • The VCF was not produced by a standard genotyping array\n"
+            "Check your VCF header for 'reference' or 'genome_build' metadata."
+        )
     if len(common) < 1000:
         console.print(
-            f"  [yellow]Warning: only {len(common)} common SNPs "
+            f"  [yellow]Warning: only {len(common):,} common SNPs "
             "(< 1000). Results may be unreliable. "
             "Check that both datasets use the same genome build (hg19 vs hg38).[/yellow]"
         )
