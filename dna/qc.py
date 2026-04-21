@@ -26,11 +26,17 @@ console = Console()
 # ──────────────────────────────────────────────────────────────────────────────
 
 def _run_plink(args: list[str], step: str) -> None:
-    """Run a PLINK command; raise RuntimeError on failure."""
+    """Run a PLINK command; raise RuntimeError on failure.
+
+    PLINK exit codes:
+      0 — success
+      3 — warnings issued but output still written (treated as success)
+      other — genuine failure
+    """
     cmd = ["plink"] + args
     console.print(f"  [dim]$ {' '.join(cmd)}[/dim]")
     result = subprocess.run(cmd, capture_output=True, text=True)
-    if result.returncode != 0:
+    if result.returncode not in (0, 3):
         console.print(f"[red]PLINK failed at '{step}' (exit {result.returncode}):[/red]")
         console.print(result.stderr or result.stdout)
         raise RuntimeError(f"PLINK step failed: {step}")
@@ -114,6 +120,14 @@ def run_qc(
 
     n_snp_qc = _count_variants(prefix + "_qc")
     console.print(f"    After QC: {n_snp_qc:,} SNPs retained")
+    if n_snp_qc == 0:
+        raise RuntimeError(
+            "No SNPs survived QC filtering. Possible causes:\n"
+            "  • The VCF is empty or uses unsupported format\n"
+            "  • The geno/maf/hwe thresholds are too strict\n"
+            "  • --autosome filtering removed all variants (non-standard chr names)\n"
+            "Try loosening the thresholds with --geno 0.1 --maf 0.005 --hwe 1e-10"
+        )
 
     # ── Step 1c: LD pruning ───────────────────────────────────────────────────
     console.print("  [bold]1c[/bold] LD pruning (window=50, step=10, r²<0.2)")
@@ -125,6 +139,24 @@ def run_qc(
     ], step="LD pruning")
 
     prune_in = prefix + "_ld.prune.in"
+    if not Path(prune_in).exists():
+        # Read PLINK's log for useful diagnostics
+        log_path = prefix + "_ld.log"
+        log_tail = ""
+        if Path(log_path).exists():
+            with open(log_path) as lf:
+                lines = lf.readlines()
+            log_tail = "\n  Last lines of PLINK log:\n" + "".join(
+                "    " + l for l in lines[-20:]
+            )
+        raise FileNotFoundError(
+            f"LD pruning output not found: {prune_in}\n"
+            "This usually means PLINK's --indep-pairwise step produced no output.\n"
+            "Possible causes:\n"
+            "  • Too few SNPs passed QC (check geno/maf/hwe thresholds)\n"
+            "  • PLINK exited with an unrecognised error code"
+            + log_tail
+        )
     with open(prune_in) as f:
         n_prune = sum(1 for _ in f)
     console.print(f"    After LD pruning: {n_prune:,} independent SNPs")
