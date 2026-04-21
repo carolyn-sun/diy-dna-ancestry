@@ -53,6 +53,11 @@ def _run_admixture_k(bed: str, k: int, out_dir: str, threads: int) -> dict:
     # ADMIXTURE 1.3.0 silently rejects BED files whose .bim has non-numeric
     # chromosome codes (chr1, 0, MT, …) and exits 255 with "Usage".
     clean_prefix = str(bed_dir / "admix_input")
+
+    # Print plink version for diagnostics
+    plink_ver = subprocess.run(["plink", "--version"], capture_output=True, text=True)
+    console.print(f"  [dim]plink version: {plink_ver.stdout.strip() or plink_ver.stderr.strip()}[/dim]")
+
     plink_reexport = [
         "plink",
         "--bfile", bed_path.stem,
@@ -60,7 +65,6 @@ def _run_admixture_k(bed: str, k: int, out_dir: str, threads: int) -> dict:
         "--make-bed",
         "--out", "admix_input",
         "--allow-no-sex",
-        "--silent",
     ]
     console.print(f"  [dim]Preparing ADMIXTURE input (PLINK re-export)...[/dim]")
     prep = subprocess.run(
@@ -75,24 +79,46 @@ def _run_admixture_k(bed: str, k: int, out_dir: str, threads: int) -> dict:
             + (prep.stderr or prep.stdout)
         )
 
+    # Verify admix_input.bed exists and has correct PLINK 1.9 magic bytes (6c1b01)
+    admix_bed = bed_dir / "admix_input.bed"
+    admix_bim = bed_dir / "admix_input.bim"
+    admix_fam = bed_dir / "admix_input.fam"
+    for f in (admix_bed, admix_bim, admix_fam):
+        if not f.exists() or f.stat().st_size == 0:
+            raise RuntimeError(
+                f"PLINK re-export did not produce: {f}\n"
+                f"PLINK stdout:\n{prep.stdout}\nPLINK stderr:\n{prep.stderr}"
+            )
+    with open(admix_bed, "rb") as bf:
+        magic = bf.read(3)
+    console.print(f"  [dim]BED magic bytes: {magic.hex()} (need 6c1b01 for ADMIXTURE)[/dim]")
+    if magic != b"\x6c\x1b\x01":
+        raise RuntimeError(
+            f"BED file has unexpected magic bytes: {magic.hex()}\n"
+            "ADMIXTURE 1.3.0 requires PLINK 1.9 SNP-major BED (magic: 6c1b01).\n"
+            "This may mean a PLINK 2 BED was produced. Check your plink version."
+        )
+
     # Print first 3 lines of .bim for diagnosis
-    bim_preview = Path(clean_prefix + ".bim")
-    if bim_preview.exists():
-        with open(bim_preview) as bf:
+    if admix_bim.exists():
+        with open(admix_bim) as bf:
             preview_lines = [bf.readline().rstrip() for _ in range(3)]
         console.print(
-            f"  [dim].bim preview (chr / snp / cm / pos / a1 / a2): "
-            + " | ".join(preview_lines) + "[/dim]"
+            f"  [dim].bim preview: " + " | ".join(preview_lines) + "[/dim]"
         )
+    n_snp = sum(1 for _ in open(admix_bim))
+    n_sam = sum(1 for _ in open(admix_fam))
+    console.print(f"  [dim]admix_input: {n_sam} samples, {n_snp:,} SNPs[/dim]")
 
     stem = "admix_input"
 
     # ── Run ADMIXTURE ────────────────────────────────────────────────────────
+    # Use absolute path so ADMIXTURE can find the file regardless of cwd quirks
     cmd = [
         "admixture",
         "--cv",
         "-j", str(threads),
-        f"{stem}.bed",   # filename only; cwd is bed_dir
+        str(admix_bed.resolve()),   # absolute path
         str(k),
     ]
 
