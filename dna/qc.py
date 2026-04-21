@@ -135,6 +135,8 @@ def run_qc(
         "--bfile", prefix + "_qc",
         "--indep-pairwise", "50", "10", "0.2",
         "--out", prefix + "_ld",
+        "--make-founders",   # required when only 1 sample (no parents in .fam)
+        "--allow-no-sex",    # suppress ambiguous-sex warning
         "--threads", str(threads),
     ], step="LD pruning")
 
