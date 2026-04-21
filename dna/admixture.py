@@ -113,24 +113,45 @@ def _run_admixture_k(bed: str, k: int, out_dir: str, threads: int) -> dict:
     stem = "admix_input"
 
     # ── Run ADMIXTURE ────────────────────────────────────────────────────────
-    # Use absolute path so ADMIXTURE can find the file regardless of cwd quirks
-    cmd = [
-        "admixture",
-        "--cv",
-        "-j", str(threads),
-        str(admix_bed.resolve()),   # absolute path
-        str(k),
+    # ADMIXTURE 1.3.0 argument order: file and K must come before flags.
+    # We try increasingly minimal invocations as fallback.
+    bed_abs = str(admix_bed.resolve())
+    candidate_cmds = [
+        # Preferred: file K --cv -j N  (positional args first, flags after)
+        ["admixture", bed_abs, str(k), "--cv", "-j", str(threads)],
+        # Fallback 1: no threading flag
+        ["admixture", bed_abs, str(k), "--cv"],
+        # Fallback 2: bare minimum — no flags at all (CV error won't be available)
+        ["admixture", bed_abs, str(k)],
     ]
 
-    console.print(f"  [dim]$ {' '.join(cmd)}[/dim]")
-    console.print(f"  [bold]Running K={k}[/bold]  (log: {log_path.name})")
-
-    with open(log_path, "w") as log_fh:
-        proc = subprocess.run(
-            cmd,
-            stdout=log_fh,
-            stderr=subprocess.STDOUT,
-            cwd=str(bed_dir),
+    proc = None
+    cmd  = None
+    for attempt_cmd in candidate_cmds:
+        console.print(f"  [dim]$ {' '.join(attempt_cmd)}[/dim]")
+        console.print(f"  [bold]Running K={k}[/bold]  (log: {log_path.name})")
+        with open(log_path, "w") as log_fh:
+            proc = subprocess.run(
+                attempt_cmd,
+                stdout=log_fh,
+                stderr=subprocess.STDOUT,
+                cwd=str(bed_dir),
+            )
+        if proc.returncode == 0:
+            cmd = attempt_cmd
+            break
+        # Check log for "Usage" — if so, try next invocation style
+        try:
+            with open(log_path) as lf:
+                log_txt = lf.read()
+        except OSError:
+            log_txt = ""
+        if "Usage:" not in log_txt:
+            # A real error (not a file/arg parsing issue) — stop retrying
+            cmd = attempt_cmd
+            break
+        console.print(
+            f"  [yellow]Attempt failed (exit {proc.returncode}), trying simpler invocation...[/yellow]"
         )
 
     if proc.returncode != 0:
