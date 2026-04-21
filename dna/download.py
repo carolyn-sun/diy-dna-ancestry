@@ -1,24 +1,23 @@
 """
-download.py — Download the HGDP reference panel
+download.py — Download the HGDP + 1KG reference panel
 
-Default source:
-  Sanger Institute FTP — HGDP_938 LD-pruned subset
-  (pre-processed: 938 samples × ~50k independent SNPs, PLINK BED/BIM/FAM format)
+Source:
+  Zenodo record 10.5281/zenodo.14286454
+  "BED/BIM/FAM files for HGDP + 1KG data from gnomAD v3.1.2"
+  - Unrelated samples only
+  - Variants filtered: AF > 1%, HWE p < 1e-12
+  - ~3,000 samples, ~1M SNPs (will be further LD-pruned by qc.py)
 
-Fallback:
-  gnomAD Google Cloud mirror (auto-switched if the primary URL fails).
-
-Files downloaded (~60–120 MB total):
-  hgdp_pruned.bed
-  hgdp_pruned.bim
-  hgdp_pruned.fam
-  hgdp_pop_labels.tsv   — sample ID ↔ population / continent mapping
+Files:
+  HGDP+1KG_SNPData.tar.gz             — BED/BIM/FAM archive
+  hgdp_1kg_sample_info...tsv          — sample → population / superpopulation labels
 """
 
 from __future__ import annotations
 
 import hashlib
 import os
+import tarfile
 from pathlib import Path
 from typing import NamedTuple
 
@@ -32,57 +31,24 @@ from rich.progress import (
 console = Console()
 
 # ──────────────────────────────────────────────────────────────────────────────
-# Data source configuration
+# Source URLs  (Zenodo record 14286454, verified 2025-04)
 # ──────────────────────────────────────────────────────────────────────────────
 
-# HGDP panel (Bergström et al. 2020, Science) — LD-pruned subset
-# publicly hosted by gnomAD / Broad Institute
-# https://gnomad.broadinstitute.org/downloads#v3-hgdp-1kg
+_ZENODO_BASE = "https://zenodo.org/records/14286454/files"
 
-_BASE_URL_PRIMARY = (
-    "https://storage.googleapis.com/gcp-public-data--gnomad"
-    "/release/3.1/secondary_analysis/hgdp_1kg/pca_hgdp_subset"
-)
-
-# Population label table (lightweight version maintained by this project)
+_SNP_ARCHIVE_URL = "https://zenodo.org/records/14286454/files/HGDP+1KG_SNPData.tar.gz?download=1"
 _LABELS_URL = (
-    "https://raw.githubusercontent.com/armartin/ancestry_pipeline"
-    "/master/hgdp_labels.txt"
+    "https://zenodo.org/records/14286454/files/"
+    "hgdp_1kg_sample_info.unrelateds.pca_outliers_removed.with_project.tsv"
+    "?download=1"
 )
 
+_SNP_ARCHIVE_NAME  = "HGDP+1KG_SNPData.tar.gz"
+_LABELS_LOCAL_NAME = "hgdp_pop_labels.tsv"
 
-class FileSpec(NamedTuple):
-    remote_url: str
-    local_name: str
-    description: str
-    md5: str | None = None  # optional integrity check
-
-
-_FILES: list[FileSpec] = [
-    FileSpec(
-        remote_url=f"{_BASE_URL_PRIMARY}.bed",
-        local_name="hgdp_pruned.bed",
-        description="HGDP reference panel BED (binary genotypes)",
-    ),
-    FileSpec(
-        remote_url=f"{_BASE_URL_PRIMARY}.bim",
-        local_name="hgdp_pruned.bim",
-        description="HGDP reference panel BIM (SNP info)",
-    ),
-    FileSpec(
-        remote_url=f"{_BASE_URL_PRIMARY}.fam",
-        local_name="hgdp_pruned.fam",
-        description="HGDP reference panel FAM (sample info)",
-    ),
-    FileSpec(
-        remote_url=_LABELS_URL,
-        local_name="hgdp_pop_labels.tsv",
-        description="HGDP sample → population / continent label table",
-    ),
-]
 
 # ──────────────────────────────────────────────────────────────────────────────
-# Core download function
+# Low-level helpers
 # ──────────────────────────────────────────────────────────────────────────────
 
 def _md5_file(path: Path) -> str:
@@ -93,20 +59,11 @@ def _md5_file(path: Path) -> str:
     return h.hexdigest()
 
 
-def _download_file(
-    url: str,
-    dest: Path,
-    description: str,
-    force: bool = False,
-    expected_md5: str | None = None,
-) -> bool:
-    """Download a single file with a progress bar. Returns True on success."""
+def _download_file(url: str, dest: Path, label: str, force: bool = False) -> bool:
+    """Stream-download a file with a rich progress bar. Returns True on success."""
     if dest.exists() and not force:
-        if expected_md5 and _md5_file(dest) != expected_md5:
-            console.print(f"  [yellow]MD5 mismatch — re-downloading: {dest.name}[/yellow]")
-        else:
-            console.print(f"  [dim]Already exists, skipping: {dest.name}[/dim]")
-            return True
+        console.print(f"  [dim]Already exists, skipping: {dest.name}[/dim]")
+        return True
 
     try:
         with requests.get(url, stream=True, timeout=60) as resp:
@@ -122,21 +79,56 @@ def _download_file(
                 console=console,
                 transient=True,
             ) as progress:
-                task = progress.add_task(description, total=total or None)
+                task = progress.add_task(label, total=total or None)
                 with open(dest, "wb") as fh:
                     for chunk in resp.iter_content(chunk_size=65536):
                         fh.write(chunk)
                         progress.advance(task, len(chunk))
 
-        console.print(f"  [green]✓[/green] {dest.name} ({dest.stat().st_size / 1e6:.1f} MB)")
+        size_mb = dest.stat().st_size / 1e6
+        console.print(f"  [green]✓[/green] {dest.name}  ({size_mb:.1f} MB)")
         return True
 
     except requests.RequestException as exc:
-        console.print(f"  [red]✗ Download failed: {dest.name}[/red]")
-        console.print(f"    {exc}")
+        console.print(f"  [red]✗ Download failed: {dest.name}[/red]  {exc}")
         if dest.exists():
-            dest.unlink()  # remove partial file
+            dest.unlink()
         return False
+
+
+def _extract_tar(archive: Path, dest_dir: Path) -> list[Path]:
+    """Extract a .tar.gz archive; return paths of extracted files."""
+    console.print(f"  Extracting {archive.name} ...")
+    extracted: list[Path] = []
+    with tarfile.open(archive, "r:gz") as tf:
+        for member in tf.getmembers():
+            tf.extract(member, path=dest_dir)
+            extracted.append(dest_dir / member.name)
+    console.print(f"  [green]✓[/green] Extracted {len(extracted)} file(s)")
+    return extracted
+
+
+def _find_bed_prefix(dest_dir: Path) -> Path | None:
+    """Locate the .bed file and return its prefix (without extension)."""
+    for bed in dest_dir.rglob("*.bed"):
+        return bed.with_suffix("")   # strip .bed
+    return None
+
+
+def _rename_to_canonical(bed_prefix: Path, dest_dir: Path) -> Path:
+    """
+    Rename BED/BIM/FAM to a fixed name 'hgdp_pruned.*' so downstream code
+    can always reference the same prefix.
+    """
+    canon = dest_dir / "hgdp_pruned"
+    if canon.with_suffix(".bed").exists():
+        return canon  # already renamed
+    for ext in (".bed", ".bim", ".fam"):
+        src = bed_prefix.with_suffix(ext)
+        dst = canon.with_suffix(ext)
+        if src.exists() and not dst.exists():
+            src.rename(dst)
+    return canon
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -145,44 +137,89 @@ def _download_file(
 
 def download_hgdp(out_dir: str = "data/hgdp", force: bool = False) -> Path:
     """
-    Download the HGDP reference panel to out_dir.
+    Download the HGDP + 1KG reference panel (Zenodo 10.5281/zenodo.14286454).
+
+    Steps:
+      1. Download HGDP+1KG_SNPData.tar.gz
+      2. Extract BED/BIM/FAM and rename to hgdp_pruned.*
+      3. Download sample-info / population labels TSV
 
     Args:
-        out_dir:  Local directory to store files
-        force:    If True, overwrite existing files
+        out_dir: Local directory to store files
+        force:   If True, re-download even if files exist
 
     Returns:
-        Path prefix of the reference panel BED (without extension)
+        Path prefix of the reference panel BED (without extension),
+        i.e. out_dir/hgdp_pruned
 
     Raises:
-        RuntimeError: If any core file fails to download
+        RuntimeError: If a critical file fails to download or extract
     """
     dest_dir = Path(out_dir)
     dest_dir.mkdir(parents=True, exist_ok=True)
 
-    console.print(f"\n[bold cyan]Downloading HGDP reference panel[/bold cyan]")
+    console.print("\n[bold cyan]Downloading HGDP + 1KG reference panel[/bold cyan]")
+    console.print(f"  Source: Zenodo 10.5281/zenodo.14286454")
     console.print(f"  Destination: [dim]{dest_dir.resolve()}[/dim]\n")
 
-    failed: list[str] = []
-    for spec in _FILES:
-        dest = dest_dir / spec.local_name
+    canon_prefix = dest_dir / "hgdp_pruned"
+
+    # ── 1. BED/BIM/FAM archive ────────────────────────────────────────────────
+    archive_path = dest_dir / _SNP_ARCHIVE_NAME
+
+    bed_ready = (
+        canon_prefix.with_suffix(".bed").exists() and
+        canon_prefix.with_suffix(".bim").exists() and
+        canon_prefix.with_suffix(".fam").exists()
+    )
+
+    if bed_ready and not force:
+        console.print("  [dim]BED/BIM/FAM already present, skipping download.[/dim]")
+    else:
         ok = _download_file(
-            url=spec.remote_url, dest=dest, description=spec.description,
-            force=force, expected_md5=spec.md5,
+            url=_SNP_ARCHIVE_URL,
+            dest=archive_path,
+            label="HGDP+1KG SNP data",
+            force=force,
         )
-        if not ok and spec.local_name.endswith((".bed", ".bim", ".fam")):
-            failed.append(spec.local_name)
+        if not ok:
+            raise RuntimeError(
+                "Failed to download SNP archive from Zenodo.\n"
+                "Check your connection or visit: https://doi.org/10.5281/zenodo.14286454"
+            )
 
-    if failed:
-        raise RuntimeError(
-            f"The following core files failed to download: {failed}\n"
-            "Check your network connection, or manually place the files in: "
-            + str(dest_dir.resolve())
+        extracted = _extract_tar(archive_path, dest_dir)
+
+        bed_prefix = _find_bed_prefix(dest_dir)
+        if bed_prefix is None:
+            raise RuntimeError(
+                f"No .bed file found after extracting {archive_path.name}. "
+                f"Extracted files: {[p.name for p in extracted]}"
+            )
+
+        canon_prefix = _rename_to_canonical(bed_prefix, dest_dir)
+
+        # Remove archive to save disk space
+        archive_path.unlink(missing_ok=True)
+        console.print("  Removed archive file to save disk space.")
+
+    # ── 2. Population labels ──────────────────────────────────────────────────
+    labels_path = dest_dir / _LABELS_LOCAL_NAME
+    ok = _download_file(
+        url=_LABELS_URL,
+        dest=labels_path,
+        label="Population labels",
+        force=force,
+    )
+    if not ok:
+        console.print(
+            "  [yellow]Warning: population labels failed to download. "
+            "Population colouring in plots will be disabled.[/yellow]"
         )
 
-    ref_prefix = dest_dir / "hgdp_pruned"
-    console.print(f"\n[bold green]HGDP reference panel ready[/bold green]")
-    console.print(f"  Prefix: [cyan]{ref_prefix}[/cyan]")
-    console.print("  Files: .bed / .bim / .fam / hgdp_pop_labels.tsv\n")
+    # ── Done ──────────────────────────────────────────────────────────────────
+    console.print(f"\n[bold green]Reference panel ready[/bold green]")
+    console.print(f"  Prefix : [cyan]{canon_prefix}[/cyan]")
+    console.print( "  Files  : hgdp_pruned.bed / .bim / .fam / hgdp_pop_labels.tsv\n")
 
-    return ref_prefix
+    return canon_prefix

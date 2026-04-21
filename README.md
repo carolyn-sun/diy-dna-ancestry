@@ -14,8 +14,6 @@ A DIY tool for personal DNA ancestry analysis
 
 ## Setup
 
-**macOS / Linux**
-
 ```bash
 bash setup.sh
 conda activate dna-ancestry
@@ -83,19 +81,23 @@ results/
     └── admixture_K*.log
 ```
 
+## Reference panel
+
+- Dataset: HGDP + 1KG from [gnomAD v3.1.2](https://gnomad.broadinstitute.org/downloads#v3-hgdp-1kg)
+- Download: [Zenodo 10.5281/zenodo.14286454](https://doi.org/10.5281/zenodo.14286454) pre-formatted BED/BIM/FAM by GIANT consortium
+- Samples: ~3,000 unrelated, AF > 1%, HWE p < 1e-12
+
+## Tools
+
+- [PLINK 1.9](https://www.cog-genomics.org/plink/1.9/)
+- [ADMIXTURE 1.3](https://dalexander.github.io/admixture/)
+
 ## Development
 
 ```bash
 conda activate dna-ancestry
 pytest tests/ -v
 ```
-
-## Data sources and tools
-
-- [HGDP](https://www.internationalgenome.org/data-portal/data-collection/HGDP)
-- [gnomAD](https://gnomad.broadinstitute.org/)
-- [PLINK 1.9](https://www.cog-genomics.org/plink/1.9/)
-- [ADMIXTURE 1.3](https://dalexander.github.io/admixture/)
 
 ## Disclaimer
 
