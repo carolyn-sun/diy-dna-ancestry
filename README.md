@@ -9,8 +9,8 @@ A DIY tool for personal DNA ancestry analysis
 - [Anaconda](https://www.anaconda.com/download) or [Miniconda](https://docs.conda.io/en/latest/miniconda.html)
 - The `.vcf` file from a DNA test
 
-> **Apple Silicon:** `setup.sh` auto-sets `CONDA_SUBDIR=osx-64` so PLINK and ADMIXTURE
-> resolve from bioconda and run transparently via Rosetta 2.
+> [!NOTE]
+> **Apple Silicon:** `setup.sh` auto-sets `CONDA_SUBDIR=osx-64` so PLINK and ADMIXTURE resolve from bioconda and run transparently via Rosetta 2.
 
 ## Setup
 
