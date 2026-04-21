@@ -32,14 +32,25 @@ def _run_admixture_k(bed: str, k: int, out_dir: str, threads: int) -> dict:
     """
     os.makedirs(out_dir, exist_ok=True)
 
-    bed_path = Path(bed + ".bed")
-    log_path = Path(out_dir) / f"admixture_K{k}.log"
+    bed_path = Path(bed + ".bed").resolve()
+    out_path = Path(out_dir).resolve()
+    log_path = out_path / f"admixture_K{k}.log"
 
+    # ADMIXTURE locates .bim/.fam relative to its own working directory.
+    # Symlink the three PLINK files into out_dir so it can find them.
+    for ext in (".bed", ".bim", ".fam"):
+        src = bed_path.with_suffix(ext)
+        dst = out_path / src.name
+        if dst.is_symlink() or dst.exists():
+            dst.unlink()
+        dst.symlink_to(src)
+
+    # Run ADMIXTURE using just the filename (no directory prefix)
     cmd = [
         "admixture",
         "--cv",
         "-j", str(threads),
-        str(bed_path.resolve()),
+        bed_path.name,   # filename only — cwd is out_dir
         str(k),
     ]
 
@@ -51,18 +62,26 @@ def _run_admixture_k(bed: str, k: int, out_dir: str, threads: int) -> dict:
             cmd,
             stdout=log_fh,
             stderr=subprocess.STDOUT,
-            cwd=out_dir,  # ADMIXTURE writes .Q/.P into cwd
+            cwd=str(out_path),  # ADMIXTURE writes .Q/.P into cwd
         )
 
     if proc.returncode != 0:
+        # Print the log tail so the error is visible immediately
+        tail = ""
+        try:
+            with open(log_path) as lf:
+                lines = lf.readlines()
+            tail = "\n" + "".join(lines[-30:])
+        except OSError:
+            pass
         raise RuntimeError(
             f"ADMIXTURE K={k} failed (exit {proc.returncode})\n"
-            f"See log: {log_path}"
+            f"Log ({log_path}):{tail}"
         )
 
     stem  = bed_path.stem  # e.g. "merged"
-    raw_q = Path(out_dir) / f"{stem}.{k}.Q"
-    raw_p = Path(out_dir) / f"{stem}.{k}.P"
+    raw_q = out_path / f"{stem}.{k}.Q"
+    raw_p = out_path / f"{stem}.{k}.P"
 
     if not raw_q.exists():
         raise FileNotFoundError(

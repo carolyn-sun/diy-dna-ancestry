@@ -4,6 +4,8 @@
 
 A DIY tool for personal DNA ancestry analysis
 
+⚠️ Work in progress still
+
 ## Requirements
 
 - [Anaconda](https://www.anaconda.com/download) or [Miniconda](https://docs.conda.io/en/latest/miniconda.html)
