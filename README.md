@@ -21,24 +21,23 @@ conda activate dna-ancestry
 
 ## Pipelines
 
-```
-your.vcf
-    │
-    ▼
-[QC & LD pruning] ──────────────── HGDP reference panel (~50k SNPs)
-  geno / maf / hwe                          │
-    │                                       │
-    └──────────── [bmerge] ─────────────────┘
-                      │
-               ┌────────┴─────────┐
-               ▼                  ▼
-           [ADMIXTURE]           [PCA]
-            K=3, K=5             PC1~PC10
-               │                   │
-               └────────┬──────────┘
-                        ▼
-                 [matplotlib]
-           dark-theme PCA + bar charts
+```mermaid
+flowchart TD
+    VCF["your.vcf"]
+    QC["QC & LD pruning\ngeno / maf / hwe"]
+    HGDP["HGDP reference panel\n~50k SNPs"]
+    MERGE["bmerge"]
+    ADMIX["ADMIXTURE\nK=3, K=5"]
+    PCA["PCA\nPC1~PC10"]
+    PLOT["matplotlib\ndark-theme PCA + bar charts"]
+
+    VCF --> QC
+    HGDP --> MERGE
+    QC --> MERGE
+    MERGE --> ADMIX
+    MERGE --> PCA
+    ADMIX --> PLOT
+    PCA --> PLOT
 ```
 
 ## Full commands
