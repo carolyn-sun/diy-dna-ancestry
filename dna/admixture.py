@@ -28,29 +28,30 @@ def _run_admixture_k(bed: str, k: int, out_dir: str, threads: int) -> dict:
     """
     Run ADMIXTURE for a single K value.
 
+    ADMIXTURE looks for .bim/.fam in the same directory as the .bed file and
+    writes .Q/.P into the working directory.  We therefore run it with
+    cwd = bed_dir (so it finds the companion files), then move the outputs
+    to out_dir where the rest of the pipeline expects them.
+
     Returns a dict with keys: k, q_file, cv_error, log_file
     """
+    import shutil
+
     os.makedirs(out_dir, exist_ok=True)
 
     bed_path = Path(bed + ".bed").resolve()
+    bed_dir  = bed_path.parent          # directory containing .bed/.bim/.fam
     out_path = Path(out_dir).resolve()
     log_path = out_path / f"admixture_K{k}.log"
+    stem     = bed_path.stem            # e.g. "merged"
 
-    # ADMIXTURE locates .bim/.fam relative to its own working directory.
-    # Symlink the three PLINK files into out_dir so it can find them.
-    for ext in (".bed", ".bim", ".fam"):
-        src = bed_path.with_suffix(ext)
-        dst = out_path / src.name
-        if dst.is_symlink() or dst.exists():
-            dst.unlink()
-        dst.symlink_to(src)
-
-    # Run ADMIXTURE using just the filename (no directory prefix)
+    # ADMIXTURE is invoked from bed_dir so it can locate .bim/.fam.
+    # Use just the filename (no path prefix) so it searches in cwd.
     cmd = [
         "admixture",
         "--cv",
         "-j", str(threads),
-        bed_path.name,   # filename only — cwd is out_dir
+        bed_path.name,
         str(k),
     ]
 
@@ -62,11 +63,10 @@ def _run_admixture_k(bed: str, k: int, out_dir: str, threads: int) -> dict:
             cmd,
             stdout=log_fh,
             stderr=subprocess.STDOUT,
-            cwd=str(out_path),  # ADMIXTURE writes .Q/.P into cwd
+            cwd=str(bed_dir),  # ← run from BED directory; .Q/.P written here
         )
 
     if proc.returncode != 0:
-        # Print the log tail so the error is visible immediately
         tail = ""
         try:
             with open(log_path) as lf:
@@ -79,7 +79,13 @@ def _run_admixture_k(bed: str, k: int, out_dir: str, threads: int) -> dict:
             f"Log ({log_path}):{tail}"
         )
 
-    stem  = bed_path.stem  # e.g. "merged"
+    # Move .Q and .P from bed_dir to out_dir
+    for ext in (f".{k}.Q", f".{k}.P"):
+        src = bed_dir / f"{stem}{ext}"
+        if src.exists():
+            dst = out_path / src.name
+            shutil.move(str(src), str(dst))
+
     raw_q = out_path / f"{stem}.{k}.Q"
     raw_p = out_path / f"{stem}.{k}.P"
 
