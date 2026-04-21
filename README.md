@@ -40,6 +40,9 @@ flowchart TD
     PCA --> PLOT
 ```
 
+> [!NOTE]
+> LD pruning requires ≥2 samples and is automatically skipped for single-sample VCFs (the typical personal-use case). SNP selection is effectively handled by the HGDP merge step, which intersects your variants with the already LD-pruned reference panel.
+
 ## Full commands
 
 ```

@@ -130,19 +130,32 @@ def run_qc(
         )
 
     # ── Step 1c: LD pruning ───────────────────────────────────────────────────
+    # PLINK --indep-pairwise requires ≥2 founders to compute SNP correlations.
+    # With a single sample we skip this step and use the QC-filtered set directly;
+    # the merge step will intersect with the already-LD-pruned HGDP panel anyway.
+    n_sam_qc = _count_samples(prefix + "_qc")
+    if n_sam_qc < 2:
+        console.print(
+            "  [bold]1c[/bold] LD pruning [yellow]skipped[/yellow] "
+            f"(only {n_sam_qc} sample — PLINK requires ≥2 for LD calculation; "
+            "HGDP merge will handle SNP selection)"
+        )
+        console.print(
+            "  [bold]1d[/bold] Extract pruned SNP set [yellow]skipped[/yellow]"
+        )
+        return prefix + "_qc"
+
     console.print("  [bold]1c[/bold] LD pruning (window=50, step=10, r²<0.2)")
     _run_plink([
         "--bfile", prefix + "_qc",
         "--indep-pairwise", "50", "10", "0.2",
         "--out", prefix + "_ld",
-        "--make-founders",   # required when only 1 sample (no parents in .fam)
-        "--allow-no-sex",    # suppress ambiguous-sex warning
+        "--allow-no-sex",
         "--threads", str(threads),
     ], step="LD pruning")
 
     prune_in = prefix + "_ld.prune.in"
     if not Path(prune_in).exists():
-        # Read PLINK's log for useful diagnostics
         log_path = prefix + "_ld.log"
         log_tail = ""
         if Path(log_path).exists():
