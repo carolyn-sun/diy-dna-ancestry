@@ -140,18 +140,20 @@ def _run_admixture_k(bed: str, k: int, out_dir: str, threads: int) -> dict:
         if proc.returncode == 0:
             cmd = attempt_cmd
             break
-        # Check log for "Usage" — if so, try next invocation style
         try:
             with open(log_path) as lf:
                 log_txt = lf.read()
         except OSError:
             log_txt = ""
-        if "Usage:" not in log_txt:
-            # A real error (not a file/arg parsing issue) — stop retrying
+        # Retry on: arg/file parse failure ("Usage:") OR segfault (negative exit code)
+        is_retryable = ("Usage:" in log_txt) or (proc.returncode < 0)
+        if not is_retryable:
             cmd = attempt_cmd
             break
+        reason = "segfault" if proc.returncode < 0 else "argument parse error"
         console.print(
-            f"  [yellow]Attempt failed (exit {proc.returncode}), trying simpler invocation...[/yellow]"
+            f"  [yellow]Attempt failed (exit {proc.returncode}, {reason}),"
+            f" trying simpler invocation...[/yellow]"
         )
 
     if proc.returncode != 0:
