@@ -9,9 +9,12 @@ and returns a results dict for use by plot.py.
 from __future__ import annotations
 
 import os
+import random
 import re
 import subprocess
 from pathlib import Path
+
+import pandas as pd
 
 from rich.console import Console
 from rich.table import Table
@@ -110,7 +113,47 @@ def _run_admixture_k(bed: str, k: int, out_dir: str, threads: int) -> dict:
     n_sam = sum(1 for _ in open(admix_fam))
     console.print(f"  [dim]admix_input: {n_sam} samples, {n_snp:,} SNPs[/dim]")
 
-    stem = "admix_input"
+    # ── Subsample reference samples if dataset is too large for ADMIXTURE ────
+    # ADMIXTURE 1.3.0 (bioconda) can segfault on large matrices (~3000+ samples)
+    # due to binary/BLAS compatibility issues on some Linux environments.
+    # We cap reference samples at MAX_REF_SAMPLES; the user sample is always kept.
+    MAX_REF_SAMPLES = 500
+
+    fam_df = pd.read_csv(
+        admix_fam, sep=r"\s+", header=None,
+        names=["fid", "iid", "pat", "mat", "sex", "phen"],
+    )
+    user_rows = fam_df[fam_df["fid"] == "USER"]
+    ref_rows  = fam_df[fam_df["fid"] != "USER"]
+
+    if len(ref_rows) > MAX_REF_SAMPLES:
+        console.print(
+            f"  [yellow]Subsampling reference panel: "
+            f"{len(ref_rows):,} → {MAX_REF_SAMPLES} samples "
+            f"(ADMIXTURE stability limit)[/yellow]"
+        )
+        random.seed(42)
+        sampled_ref = ref_rows.sample(n=MAX_REF_SAMPLES, random_state=42)
+        keep_df = pd.concat([user_rows, sampled_ref])
+        keep_path = bed_dir / "admix_keep.txt"
+        keep_df[["fid", "iid"]].to_csv(keep_path, sep="\t", header=False, index=False)
+
+        sub = subprocess.run(
+            ["plink", "--bfile", "admix_input", "--keep", str(keep_path),
+             "--make-bed", "--out", "admix_sub", "--allow-no-sex"],
+            capture_output=True, text=True, cwd=str(bed_dir),
+        )
+        if sub.returncode not in (0, 3):
+            raise RuntimeError(
+                f"PLINK subsample failed (exit {sub.returncode}):\n"
+                + (sub.stderr or sub.stdout)
+            )
+        stem = "admix_sub"
+        admix_bed = bed_dir / "admix_sub.bed"
+        n_sam = len(keep_df)
+        console.print(f"  [dim]Subsampled: {n_sam} samples ({MAX_REF_SAMPLES} ref + 1 user)[/dim]")
+    else:
+        stem = "admix_input"
 
     # ── Run ADMIXTURE ────────────────────────────────────────────────────────
     # ADMIXTURE 1.3.0 argument order: file and K must come before flags.
