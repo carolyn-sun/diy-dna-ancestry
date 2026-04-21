@@ -107,3 +107,10 @@ pytest tests/ -v
 ## Further steps
 
 For the detailed gene mutation analysis, you can play with [OpenCRAVAT](https://opencravat.org/).
+
+## License
+
+This project's source code is released under the **MIT License**.
+
+> [!IMPORTANT]
+> PLINK 1.9 and ADMIXTURE 1.3 are called as external tools and are **not** bundled with this repository. Both are free for academic and non-commercial use under their own terms. Commercial use requires contacting the respective authors.
