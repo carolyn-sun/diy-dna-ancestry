@@ -30,14 +30,14 @@ your.vcf
     │                                       │
     └──────────── [bmerge] ─────────────────┘
                       │
-               ┌──────┴──────┐
-               ▼             ▼
-           [ADMIXTURE]     [PCA]
-            K=3, K=5     PC1~PC10
-               │             │
-               └──────┬───────┘
-                      ▼
-               [matplotlib]
+               ┌────────┴─────────┐
+               ▼                  ▼
+           [ADMIXTURE]           [PCA]
+            K=3, K=5             PC1~PC10
+               │                   │
+               └────────┬──────────┘
+                        ▼
+                 [matplotlib]
            dark-theme PCA + bar charts
 ```
 
