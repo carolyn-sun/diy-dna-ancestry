@@ -297,6 +297,134 @@ def _plot_admixture(k: int, q_file: str, fam_file: str, ref_dir: str, out_dir: s
 
 
 # ──────────────────────────────────────────────────────────────────────────────
+# Ancestry pie chart (geographic breakdown for the user sample)
+# ──────────────────────────────────────────────────────────────────────────────
+
+def _plot_ancestry_pie(k: int, q_file: str, fam_file: str,
+                       ref_dir: str, out_dir: str) -> None:
+    """
+    Produce a pie chart showing the user's ancestry broken down by geographic
+    region.
+
+    Method
+    ------
+    For each NMF / ADMIXTURE component i we compute its *centroid* — the
+    average proportion of that component across all reference samples belonging
+    to each geographic region.  Each component is then assigned to its dominant
+    region.  The user's Q values are mapped through this assignment to produce
+    a region-level percentage.
+
+    If a component cannot be uniquely assigned (tie), it is split proportionally.
+    """
+    # ── Load Q and FAM ────────────────────────────────────────────────────────
+    q_raw = pd.read_csv(q_file, sep=r"\s+", header=None)
+    q_raw.columns = [f"K{i+1}" for i in range(k)]
+    fam_df = pd.read_csv(fam_file, sep=r"\s+", header=None,
+                         names=["FID", "IID", "PAT", "MAT", "SEX", "PHEN"])
+    if len(fam_df) != len(q_raw):
+        fam_df = fam_df.iloc[:len(q_raw)].reset_index(drop=True)
+    q_df = pd.concat([fam_df[["FID", "IID"]], q_raw], axis=1)
+
+    # ── Load region labels ────────────────────────────────────────────────────
+    labels_df = _load_labels(ref_dir)
+    if labels_df is not None and "sample_id" in labels_df.columns and "region" in labels_df.columns:
+        q_df = q_df.merge(
+            labels_df[["sample_id", "region"]].rename(columns={"sample_id": "IID"}),
+            on="IID", how="left",
+        )
+        q_df["region"] = q_df["region"].fillna(
+            q_df["FID"].apply(lambda x: "USER" if x == "USER" else "Unknown")
+        )
+    else:
+        q_df["region"] = q_df["FID"].apply(lambda x: "USER" if x == "USER" else "Unknown")
+
+    # ── Extract user row ──────────────────────────────────────────────────────
+    user_mask = q_df["FID"] == "USER"
+    if not user_mask.any():
+        console.print("  [yellow]Pie chart: user sample not found in Q file — skipping[/yellow]")
+        return
+    user_q = q_df.loc[user_mask, [f"K{i+1}" for i in range(k)]].values[0]  # shape (k,)
+
+    # ── Compute component centroids per region (reference samples only) ───────
+    ref_df = q_df[~user_mask].copy()
+    k_cols = [f"K{i+1}" for i in range(k)]
+    region_order = [
+        "Africa", "America", "Central_South_Asia",
+        "East_Asia", "Europe", "Middle_East", "Oceania",
+    ]
+    present_regions = [r for r in region_order if r in ref_df["region"].values]
+
+    # centroid_matrix[r, i] = mean Q_i for reference samples in region r
+    centroid = np.zeros((len(present_regions), k))
+    for ri, region in enumerate(present_regions):
+        mask = ref_df["region"] == region
+        if mask.sum() > 0:
+            centroid[ri] = ref_df.loc[mask, k_cols].values.mean(axis=0)
+
+    # Assign each component to its dominant region
+    # component_to_region[i] = index in present_regions
+    component_region_idx = centroid.argmax(axis=0)  # shape (k,)
+
+    # Aggregate user ancestry proportions by region
+    ancestry: dict[str, float] = {r: 0.0 for r in present_regions}
+    for i, q_val in enumerate(user_q):
+        ancestry[present_regions[component_region_idx[i]]] += float(q_val)
+
+    # Drop zero/tiny regions
+    ancestry = {r: v for r, v in ancestry.items() if v > 0.005}
+    if not ancestry:
+        console.print("  [yellow]Pie chart: all ancestry proportions are zero — skipping[/yellow]")
+        return
+
+    # ── Draw pie chart ────────────────────────────────────────────────────────
+    labels  = list(ancestry.keys())
+    values  = np.array(list(ancestry.values()))
+    colors  = [REGION_PALETTE.get(r, REGION_PALETTE["Unknown"]) for r in labels]
+
+    fig, ax = plt.subplots(figsize=(7, 7))
+    fig.patch.set_facecolor("#0f1117")
+    ax.set_facecolor("#0f1117")
+
+    wedges, texts, autotexts = ax.pie(
+        values,
+        labels=None,
+        colors=colors,
+        autopct=lambda p: f"{p:.1f}%" if p > 2 else "",
+        startangle=140,
+        wedgeprops={"linewidth": 1.5, "edgecolor": "#0f1117"},
+        pctdistance=0.75,
+    )
+    for at in autotexts:
+        at.set_fontsize(10)
+        at.set_color("white")
+        at.set_fontweight("bold")
+
+    # Legend with percentages
+    legend_labels = [f"{r.replace('_', ' ')}  {v*100:.1f}%" for r, v in zip(labels, values)]
+    ax.legend(
+        wedges, legend_labels,
+        loc="lower center",
+        bbox_to_anchor=(0.5, -0.12),
+        ncol=2,
+        fontsize=10,
+        framealpha=0.15,
+        edgecolor="#30363d",
+    )
+
+    ax.set_title(
+        f"Estimated Ancestry Composition (K={k})",
+        fontsize=14, pad=18, color="#e6edf3",
+    )
+    # Subtitle note
+    fig.text(0.5, 0.01,
+             "Components assigned to dominant reference population per region",
+             ha="center", fontsize=8, color="#8b949e")
+
+    fig.tight_layout()
+    _save(fig, str(Path(out_dir) / f"ancestry_pie_K{k}.png"))
+
+
+# ──────────────────────────────────────────────────────────────────────────────
 # CV error curve
 # ──────────────────────────────────────────────────────────────────────────────
 
@@ -384,6 +512,9 @@ def make_all_plots(
         if merged_fam:
             _plot_admixture(k=k, q_file=result["q_file"], fam_file=merged_fam,
                             ref_dir=ref_dir, out_dir=out_dir)
+            console.print(f"  [bold]Plot: Ancestry pie K={k}[/bold]")
+            _plot_ancestry_pie(k=k, q_file=result["q_file"], fam_file=merged_fam,
+                               ref_dir=ref_dir, out_dir=out_dir)
         else:
             console.print(f"  [yellow]merged.fam not found — skipping K={k} bar chart[/yellow]")
 
