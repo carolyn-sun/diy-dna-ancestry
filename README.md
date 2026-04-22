@@ -37,7 +37,7 @@ The following outputs are generated from a real DNA test file.
 
 ### Ancestry by PCA Proximity
 
-<img src="media/pca_ancestry_knn.png" width="500">
+<img src="media/pca_ancestry_knn.png" width="580">
 
 **Algorithm:** For each of the 7 HGDP geographic regions, a **centroid** is computed as the mean PC coordinates of all reference individuals in that region. The user's ancestry proportions are estimated by **inverse-distance weighting**: each region's score is `1 / d`, where `d` is the variance-weighted Euclidean distance from the user to that region's centroid (each PC weighted by its fraction of explained variance). Scores are normalised to 100%. This method is **density-bias-free**: a region with many reference samples is not favoured over one with few, unlike KNN.
 
@@ -49,7 +49,7 @@ The following outputs are generated from a real DNA test file.
 
 ### Ancestry Pie Chart (best K by CV error)
 
-<img src="media/ancestry_pie_K7.png" width="480">
+<img src="media/ancestry_pie_K7.png" width="580">
 
 **Algorithm:** After ADMIXTURE runs at multiple K values, the K with the **lowest cross-validation (CV) error** is selected automatically. The pie chart is generated only for that best K. Each ADMIXTURE component is mapped to geographic regions using **soft assignment**: the component's mean Q-values across reference populations are used as weights, so a component that loads on multiple regions is split proportionally rather than hard-assigned to a single winner.
 
