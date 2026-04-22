@@ -4,6 +4,8 @@
 
 A DIY tool for personal DNA ancestry analysis
 
+To be honest, this is a lazy tool with no original bioinformatics insight. It automates what you could do yourself by running PLINK and ADMIXTURE directly. If you are comfortable with the command line, you probably do not need it.
+
 ## Requirements
 
 - [Anaconda](https://www.anaconda.com/download) or [Miniconda](https://docs.conda.io/en/latest/miniconda.html)
