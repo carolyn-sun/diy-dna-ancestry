@@ -77,7 +77,7 @@ def download(out_dir: str, force: bool):
     help="Input VCF file path"
 )
 @click.option(
-    "--k", "k_values", default="3,5,7", show_default=True,
+    "--k", "k_values", default="5,7,9", show_default=True,
     help=(
         "ADMIXTURE K values, comma-separated. "
         "K=7 matches the 7 HGDP geographic regions and gives the most accurate "

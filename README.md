@@ -55,7 +55,7 @@ dna plot --results DIR                # re-plot from existing results
 | Flag              | Default      | Description                                                                                   |
 | ----------------- | ------------ | --------------------------------------------------------------------------------------------- |
 | `--vcf`           | _(required)_ | Input VCF file                                                                                |
-| `--k`             | `3,5,7`      | ADMIXTURE K values. K=7 matches the 7 HGDP regions (recommended max). K>12 risks overfitting. |
+| `--k`             | `5,7,9`      | ADMIXTURE K values. K=7 matches the 7 HGDP regions (recommended max). K>12 risks overfitting. |
 | `--threads`       | `4`          | Parallel threads                                                                              |
 | `--out`           | `results/`   | Output directory                                                                              |
 | `--geno`          | `0.05`       | Genotype missingness threshold                                                                |

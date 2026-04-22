@@ -141,6 +141,122 @@ def _save(fig: plt.Figure, path: str) -> None:
     console.print(f"  [green]✓[/green] Saved: [cyan]{path}[/cyan]")
 
 
+
+# ──────────────────────────────────────────────────────────────────────────────
+# PCA-KNN ancestry proximity chart
+# ──────────────────────────────────────────────────────────────────────────────
+
+def _plot_pca_knn_ancestry(
+    pca_results: dict, ref_dir: str, out_dir: str, n_neighbors: int = 30
+) -> None:
+    """
+    Estimate ancestry from PCA position using K nearest neighbours.
+
+    Finds the n_neighbors closest reference samples in the full PC space
+    (all available PCs, usually 10) and reports their regional composition
+    as a horizontal bar chart.  This directly reflects the user's position
+    in the PCA scatter plots — more intuitive than ADMIXTURE-derived pie charts.
+    """
+    from collections import Counter
+
+    # ── Load PCA data ─────────────────────────────────────────────────────────
+    if "eigenvec_df" in pca_results:
+        df = pca_results["eigenvec_df"]
+    else:
+        eigenvec_path = pca_results["eigenvec"]
+        df = pd.read_csv(eigenvec_path, sep=r"\s+", header=None)
+        n_pcs = df.shape[1] - 2
+        df.columns = ["FID", "IID"] + [f"PC{i}" for i in range(1, n_pcs + 1)]
+
+    pc_cols = [c for c in df.columns if c.startswith("PC")]
+
+    # ── Separate user and reference samples ───────────────────────────────────
+    user_mask = df["FID"] == "USER"
+    ref_mask  = ~user_mask
+
+    if not user_mask.any():
+        console.print("  [yellow]PCA KNN: no USER sample found — skipping[/yellow]")
+        return
+
+    user_coords = df.loc[user_mask, pc_cols].values[0]   # (n_pcs,)
+    ref_coords  = df.loc[ref_mask,  pc_cols].values       # (n_ref, n_pcs)
+    ref_iids    = df.loc[ref_mask, "IID"].values
+
+    # ── Load region labels ────────────────────────────────────────────────────
+    labels_df = _load_labels(ref_dir)
+    if (labels_df is None
+            or "sample_id" not in labels_df.columns
+            or "region"    not in labels_df.columns):
+        console.print("  [yellow]PCA KNN: no region labels found — skipping[/yellow]")
+        return
+
+    iid_to_region = dict(zip(labels_df["sample_id"], labels_df["region"]))
+
+    # ── KNN in full PC space (Euclidean) ──────────────────────────────────────
+    dists = np.linalg.norm(ref_coords - user_coords, axis=1)
+    k     = min(n_neighbors, len(dists))
+    nn_idx = np.argsort(dists)[:k]
+
+    nn_regions = [iid_to_region.get(ref_iids[i], "Unknown") for i in nn_idx]
+    nn_dists   = dists[nn_idx]
+
+    region_counts = Counter(nn_regions)
+    total = sum(region_counts.values())
+
+    # ── Order regions by proximity fraction ───────────────────────────────────
+    region_order = [
+        "East_Asia", "Europe", "Middle_East", "Central_South_Asia",
+        "America", "Africa", "Oceania", "Unknown",
+    ]
+    present = [(r, region_counts[r] / total)
+               for r in region_order if r in region_counts]
+    present += [(r, v / total) for r, v in region_counts.items()
+                if r not in region_order and v > 0]
+    present = sorted(present, key=lambda x: x[1])   # ascending → longest bar on top
+
+    regions = [r for r, _ in present]
+    values  = [v for _, v in present]
+    colors  = [REGION_PALETTE.get(r, REGION_PALETTE["Unknown"]) for r in regions]
+
+    # ── Draw ──────────────────────────────────────────────────────────────────
+    fig, ax = plt.subplots(figsize=(9, max(3, len(regions) * 0.7 + 1.5)))
+    fig.patch.set_facecolor("#0f1117")
+    ax.set_facecolor("#0f1117")
+
+    bars = ax.barh(
+        [r.replace("_", " ") for r in regions], values,
+        color=colors, edgecolor="#0f1117", linewidth=1.2, height=0.65,
+    )
+    for bar, val in zip(bars, values):
+        ax.text(
+            bar.get_width() + 0.005,
+            bar.get_y() + bar.get_height() / 2,
+            f"{val * 100:.1f}%",
+            va="center", ha="left", fontsize=11, color="#e6edf3", fontweight="bold",
+        )
+
+    ax.set_xlim(0, max(values) * 1.28)
+    ax.xaxis.set_visible(False)
+    ax.tick_params(colors="#8b949e", labelsize=11)
+    ax.set_yticklabels([r.replace("_", " ") for r in regions],
+                       color="#e6edf3", fontsize=11)
+    for spine in ax.spines.values():
+        spine.set_edgecolor("#30363d")
+
+    ax.set_title(
+        f"Ancestry by PCA Proximity  ({k} nearest neighbours, {len(pc_cols)} PCs)",
+        fontsize=13, pad=14, color="#e6edf3",
+    )
+    fig.text(
+        0.5, 0.01,
+        f"Euclidean distance in {len(pc_cols)}-D PC space  ·  "
+        f"nearest: {nn_dists[0]:.4f}  ·  furthest of {k}: {nn_dists[-1]:.4f}",
+        ha="center", fontsize=8, color="#8b949e",
+    )
+    fig.tight_layout(rect=[0, 0.05, 1, 1])
+    _save(fig, str(Path(out_dir) / "pca_ancestry_knn.png"))
+
+
 # ──────────────────────────────────────────────────────────────────────────────
 # PCA scatter plot
 # ──────────────────────────────────────────────────────────────────────────────
@@ -503,6 +619,9 @@ def make_all_plots(
 
     console.print("  [bold]Plot: PCA (PC3 vs PC4)[/bold]")
     _plot_pca(pca_results, ref_dir=ref_dir, out_dir=out_dir, pc_x=3, pc_y=4)
+
+    console.print("  [bold]Plot: Ancestry by PCA proximity (KNN)[/bold]")
+    _plot_pca_knn_ancestry(pca_results, ref_dir=ref_dir, out_dir=out_dir, n_neighbors=30)
 
     # Locate FAM file — prefer the one stored in result (matches Q row count)
     merged_fam = None
