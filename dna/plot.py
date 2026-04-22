@@ -361,17 +361,24 @@ def _plot_ancestry_pie(k: int, q_file: str, fam_file: str,
         if mask.sum() > 0:
             centroid[ri] = ref_df.loc[mask, k_cols].values.mean(axis=0)
 
-    # Assign each component to its dominant region
-    # component_to_region[i] = index in present_regions
-    component_region_idx = centroid.argmax(axis=0)  # shape (k,)
+    # ── Soft assignment (weighted) ────────────────────────────────────────────
+    # Each component i contributes user_q[i] ancestry, split across regions
+    # proportionally to centroid[:, i].  This prevents a component that
+    # represents both Africa and Europe from being incorrectly 100% Africa.
+    #
+    #   weight[r, i] = centroid[r, i] / sum_r(centroid[r, i])
+    #   ancestry[r] += user_q[i] * weight[r, i]  for all i
+    #
+    col_sums = centroid.sum(axis=0, keepdims=True).clip(1e-12)
+    weights = centroid / col_sums               # shape (n_regions, k)
+    ancestry_vec = weights @ user_q             # shape (n_regions,)
 
-    # Aggregate user ancestry proportions by region
-    ancestry: dict[str, float] = {r: 0.0 for r in present_regions}
-    for i, q_val in enumerate(user_q):
-        ancestry[present_regions[component_region_idx[i]]] += float(q_val)
+    ancestry: dict[str, float] = {
+        r: float(v) for r, v in zip(present_regions, ancestry_vec)
+    }
 
-    # Drop zero/tiny regions
-    ancestry = {r: v for r, v in ancestry.items() if v > 0.005}
+    # Drop negligible regions (< 1%)
+    ancestry = {r: v for r, v in ancestry.items() if v > 0.01}
     if not ancestry:
         console.print("  [yellow]Pie chart: all ancestry proportions are zero — skipping[/yellow]")
         return
