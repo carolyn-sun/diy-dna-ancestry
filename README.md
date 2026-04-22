@@ -12,7 +12,8 @@ A DIY tool for personal DNA ancestry analysis
 - The `.vcf` file from a DNA test
 
 > [!NOTE]
-> **Apple Silicon:** `setup.sh` auto-sets `CONDA_SUBDIR=osx-64` so PLINK and ADMIXTURE resolve from bioconda and run transparently via Rosetta 2.
+> **Apple Silicon** `setup.sh` auto-sets `CONDA_SUBDIR=osx-64` so PLINK and ADMIXTURE resolve from bioconda and run transparently via Rosetta 2.
+> **Windows** ADMIXTURE has no official Windows binary, so use WSL2.
 
 ## Setup
 
@@ -54,17 +55,17 @@ dna run --vcf FILE [options]          # run the full pipeline
 dna plot --results DIR                # re-plot from existing results
 ```
 
-| Flag             | Default      | Description                                                         |
-| ---------------- | ------------ | ------------------------------------------------------------------- |
-| `--vcf`          | _(required)_ | Input VCF file                                                      |
-| `--k`            | `3,5`        | ADMIXTURE K values, comma-separated                                 |
-| `--threads`      | `4`          | Parallel threads                                                    |
-| `--out`          | `results/`   | Output directory                                                    |
-| `--geno`         | `0.05`       | Genotype missingness threshold                                      |
-| `--maf`          | `0.01`       | Minimum allele frequency                                            |
-| `--hwe`          | `1e-6`       | Hardy–Weinberg p-value cutoff                                       |
-| `--skip-plot`    | —            | Skip the plotting step                                              |
-| `--nmf-fallback` | —            | Enable NMF approximation if ADMIXTURE crashes (see note below)      |
+| Flag             | Default      | Description                                                    |
+| ---------------- | ------------ | -------------------------------------------------------------- |
+| `--vcf`          | _(required)_ | Input VCF file                                                 |
+| `--k`            | `3,5`        | ADMIXTURE K values, comma-separated                            |
+| `--threads`      | `4`          | Parallel threads                                               |
+| `--out`          | `results/`   | Output directory                                               |
+| `--geno`         | `0.05`       | Genotype missingness threshold                                 |
+| `--maf`          | `0.01`       | Minimum allele frequency                                       |
+| `--hwe`          | `1e-6`       | Hardy–Weinberg p-value cutoff                                  |
+| `--skip-plot`    | —            | Skip the plotting step                                         |
+| `--nmf-fallback` | —            | Enable NMF approximation if ADMIXTURE crashes (see note below) |
 
 > [!WARNING]
 > `--nmf-fallback` enables a **Python NMF approximation** when the ADMIXTURE 1.3 binary
