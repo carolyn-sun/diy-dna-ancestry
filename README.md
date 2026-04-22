@@ -19,30 +19,6 @@ bash setup.sh
 conda activate dna-ancestry
 ```
 
-## Pipelines
-
-```mermaid
-flowchart TD
-    VCF["your.vcf"]
-    QC["QC & LD pruning\ngeno / maf / hwe"]
-    HGDP["HGDP reference panel\n~50k SNPs"]
-    MERGE["bmerge"]
-    ADMIX["ADMIXTURE\nK=5, 7, 9"]
-    PCA["PCA\nPC1~PC10"]
-    PLOT["matplotlib\ndark-theme PCA + bar charts"]
-
-    VCF --> QC
-    HGDP --> MERGE
-    QC --> MERGE
-    MERGE --> ADMIX
-    MERGE --> PCA
-    ADMIX --> PLOT
-    PCA --> PLOT
-```
-
-> [!NOTE]
-> LD pruning requires ≥2 samples and is automatically skipped for single-sample VCFs (the typical personal-use case). SNP selection is effectively handled by the HGDP merge step, which intersects your variants with the already LD-pruned reference panel.
-
 ## Example and algorithm
 
 The following outputs are generated from a real DNA test file.
@@ -96,6 +72,30 @@ These two charts answer **different questions** and are best read together.
 
 > [!TIP]
 > As a rule of thumb: trust the **proximity chart** for an intuitive first read, and trust the **pie chart** (at the best K) for a statistically rigorous breakdown. If both give similar percentages, you can be confident in the result.
+
+## Pipelines
+
+```mermaid
+flowchart TD
+    VCF["your.vcf"]
+    QC["QC & LD pruning\ngeno / maf / hwe"]
+    HGDP["HGDP reference panel\n~50k SNPs"]
+    MERGE["bmerge"]
+    ADMIX["ADMIXTURE\nK=5, 7, 9"]
+    PCA["PCA\nPC1~PC10"]
+    PLOT["matplotlib\ndark-theme PCA + bar charts"]
+
+    VCF --> QC
+    HGDP --> MERGE
+    QC --> MERGE
+    MERGE --> ADMIX
+    MERGE --> PCA
+    ADMIX --> PLOT
+    PCA --> PLOT
+```
+
+> [!NOTE]
+> LD pruning requires ≥2 samples and is automatically skipped for single-sample VCFs (the typical personal-use case). SNP selection is effectively handled by the HGDP merge step, which intersects your variants with the already LD-pruned reference panel.
 
 ## Full commands
 
