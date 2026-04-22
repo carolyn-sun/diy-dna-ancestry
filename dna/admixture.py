@@ -284,14 +284,14 @@ def _run_admixture_k(bed: str, k: int, out_dir: str, threads: int,
 
     bed_abs = str(admix_bed.resolve())
     candidate_cmds = [
-        # Preferred: multi-thread with CV
-        ([admixture_bin, bed_abs, str(k), "--cv", "-j", str(threads)], _base_env),
-        # Fallback 1: no -j flag (lets ADMIXTURE choose its own thread count)
-        ([admixture_bin, bed_abs, str(k), "--cv"],                      _base_env),
+        # Preferred: multi-thread with CV.  ADMIXTURE 1.3 requires -j<N> (no space).
+        ([admixture_bin, bed_abs, str(k), "--cv", f"-j{threads}"],  _base_env),
+        # Fallback 1: no thread flag
+        ([admixture_bin, bed_abs, str(k), "--cv"],                   _base_env),
         # Fallback 2: single-threaded with CV (OMP_NUM_THREADS=1)
-        ([admixture_bin, bed_abs, str(k), "--cv"],                      _omp1_env),
+        ([admixture_bin, bed_abs, str(k), "--cv"],                   _omp1_env),
         # Fallback 3: single-threaded, no extra flags
-        ([admixture_bin, bed_abs, str(k)],                              _omp1_env),
+        ([admixture_bin, bed_abs, str(k)],                           _omp1_env),
     ]
 
     proc = None
@@ -330,6 +330,28 @@ def _run_admixture_k(bed: str, k: int, out_dir: str, threads: int,
     # If all ADMIXTURE invocations crashed (segfault), optionally use NMF fallback
     all_segfaulted = (proc is not None and proc.returncode < 0)
     if all_segfaulted:
+        # Check installed ADMIXTURE version to give targeted advice
+        _admix_ver = ""
+        try:
+            _vp = subprocess.run(
+                [admixture_bin, "--version"], capture_output=True, text=True, timeout=5
+            )
+            _m = re.search(r"Version\s+([\d.]+)", (_vp.stdout + _vp.stderr))
+            if _m:
+                _admix_ver = _m.group(1)
+        except Exception:
+            pass
+
+        _upgrade_hint = ""
+        if _admix_ver == "1.3.0":
+            _upgrade_hint = (
+                "\n  ADMIXTURE 1.3.0 has a known SIGSEGV bug on modern Linux kernels."
+                "\n  Upgrade to 1.3.1 (fixes the crash):"
+                "\n    curl -fsSL https://dalexander.github.io/admixture/binaries/admixture_linux-1.3.1.tar.gz \\"
+                "\n         | tar -xz --strip-components=1 -C ~/bin/"
+                "\n    dna run --vcf your.vcf --admixture-bin ~/bin/admixture"
+            )
+
         if allow_nmf_fallback:
             console.print(
                 "  [yellow]ADMIXTURE binary crashed (SIGSEGV). "
@@ -341,13 +363,13 @@ def _run_admixture_k(bed: str, k: int, out_dir: str, threads: int,
             )
         else:
             raise RuntimeError(
-                f"ADMIXTURE K={k} crashed with a segfault (exit {proc.returncode}).\n"
-                "This usually means the ADMIXTURE binary is incompatible with your CPU/OS.\n"
-                "Options:\n"
-                "  1. Run on a native x86-64 Linux machine or Docker container.\n"
-                "  2. Re-enable the approximate NMF fallback with --nmf-fallback\n"
-                "     (results will be less accurate than true ADMIXTURE).\n"
-                f"  Log: {log_path}"
+                f"ADMIXTURE K={k} crashed with a segfault (exit {proc.returncode})."
+                f"{_upgrade_hint}"
+                "\nOptions:"
+                "\n  1. Upgrade to ADMIXTURE 1.3.1 (see above)."
+                "\n  2. Re-enable the approximate NMF fallback with --nmf-fallback"
+                "\n     (results will be less accurate than true ADMIXTURE)."
+                f"\n  Log: {log_path}"
             )
 
     if proc.returncode != 0:

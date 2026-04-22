@@ -112,6 +112,35 @@ if conda run -n "$ENV_NAME" admixture --version &>/dev/null 2>&1; then
     AD_VER=$(conda run -n "$ENV_NAME" admixture --version 2>/dev/null | head -1 || echo "unknown")
     success "ADMIXTURE ($AD_VER)"
     ADMIXTURE_OK=true
+
+    # ── Auto-upgrade 1.3.0 → 1.3.1 on Linux x86_64 ──────────────────────────
+    # ADMIXTURE 1.3.0 has a known SIGSEGV crash on modern Linux kernels
+    # when allocating the genotype matrix.  1.3.1 fixes this.
+    if [ "$OS" = "Linux" ] && [ "$ARCH" = "x86_64" ]; then
+        AD_VER_NUM=$(conda run -n "$ENV_NAME" admixture --version 2>/dev/null \
+                     | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+        if [ "$AD_VER_NUM" = "1.3.0" ]; then
+            warn "ADMIXTURE 1.3.0 detected — upgrading to 1.3.1 (fixes SIGSEGV on modern kernels)..."
+            CONDA_BIN=$(conda run -n "$ENV_NAME" python -c \
+                        "import sys; print(sys.prefix)" 2>/dev/null)/bin
+            TMP_DIR=$(mktemp -d)
+            URL="https://dalexander.github.io/admixture/binaries/admixture_linux-1.3.1.tar.gz"
+            if curl -fsSL "$URL" -o "$TMP_DIR/admixture131.tar.gz" 2>/dev/null; then
+                tar -xzf "$TMP_DIR/admixture131.tar.gz" -C "$TMP_DIR" 2>/dev/null
+                BIN=$(find "$TMP_DIR" -name admixture -type f | head -1)
+                if [ -n "$BIN" ]; then
+                    cp "$BIN" "$CONDA_BIN/admixture"
+                    chmod +x "$CONDA_BIN/admixture"
+                    success "ADMIXTURE upgraded to 1.3.1"
+                else
+                    warn "Could not extract admixture binary from archive; staying on 1.3.0"
+                fi
+            else
+                warn "Failed to download ADMIXTURE 1.3.1 (no internet?); staying on 1.3.0"
+            fi
+            rm -rf "$TMP_DIR"
+        fi
+    fi
 else
     warn "ADMIXTURE not found in environment"
 fi
