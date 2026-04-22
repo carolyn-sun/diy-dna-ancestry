@@ -49,13 +49,13 @@ The following outputs are generated from a real DNA test file.
 
 ### PCA — PC1 vs PC2
 
-<img src="media/pca_PC1_PC2.png" width="720">
+<img src="media/pca_PC1_PC2.png" width="580">
 
 **Algorithm:** Principal Component Analysis (PCA) is run via PLINK on the merged dataset (user + ~3,000 HGDP reference individuals). Each dot is one person; axes are the top two linear dimensions of genetic variation. PC1 (51%) separates African from non-African populations; PC2 (32%) separates East Asian from European/South Asian. The white star (★) marks your sample. This plot gives a lossless map of where you sit in global genetic space.
 
 ### PCA — PC3 vs PC4
 
-<img src="media/pca_PC3_PC4.png" width="720">
+<img src="media/pca_PC3_PC4.png" width="580">
 
 **Algorithm:** Same PCA, viewed along PC3 (5.2%) and PC4 (3.5%). These lower-variance axes reveal finer structure — separating Native American from East Asian, and Middle Eastern from European. Because these axes capture within-Eurasian variation, they often reveal more nuanced placement than PC1/PC2 alone.
 
