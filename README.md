@@ -41,17 +41,17 @@ The following outputs are generated from a real DNA test file.
 
 **Algorithm:** For each of the 7 HGDP geographic regions, a **centroid** is computed as the mean PC coordinates of all reference individuals in that region. The user's ancestry proportions are estimated by **inverse-distance weighting**: each region's score is `1 / d`, where `d` is the variance-weighted Euclidean distance from the user to that region's centroid (each PC weighted by its fraction of explained variance). Scores are normalised to 100%. This method is **density-bias-free**: a region with many reference samples is not favoured over one with few, unlike KNN.
 
-### ADMIXTURE Bar Chart (K = 7)
-
-<img src="media/admixture_K7.png" width="720">
-
-**Algorithm:** ADMIXTURE fits a binomial likelihood model assuming `K` discrete ancestral populations. Each bar represents one individual; coloured segments show the proportion of ancestry from each of the `K` inferred components. Individuals are sorted by geographic region. The user's bar (★) shows which global components contribute to their genome. K = 7 is used here because it matches the 7 HGDP geographic super-regions, giving the cleanest component-to-region correspondence.
-
 ### Ancestry Pie Chart (best K by CV error)
 
 <img src="media/ancestry_pie_K7.png" width="580">
 
 **Algorithm:** After ADMIXTURE runs at multiple K values, the K with the **lowest cross-validation (CV) error** is selected automatically. The pie chart is generated only for that best K. Each ADMIXTURE component is mapped to geographic regions using **soft assignment**: the component's mean Q-values across reference populations are used as weights, so a component that loads on multiple regions is split proportionally rather than hard-assigned to a single winner.
+
+### ADMIXTURE Bar Chart (K = 7)
+
+<img src="media/admixture_K7.png" width="720">
+
+**Algorithm:** ADMIXTURE fits a binomial likelihood model assuming `K` discrete ancestral populations. Each bar represents one individual; coloured segments show the proportion of ancestry from each of the `K` inferred components. Individuals are sorted by geographic region. The user's bar (★) shows which global components contribute to their genome. K = 7 is used here because it matches the 7 HGDP geographic super-regions, giving the cleanest component-to-region correspondence.
 
 ### Interpreting the results: Proximity chart vs Pie chart
 
