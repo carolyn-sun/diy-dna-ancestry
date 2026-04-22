@@ -141,23 +141,26 @@ def _save(fig: plt.Figure, path: str) -> None:
     console.print(f"  [green]✓[/green] Saved: [cyan]{path}[/cyan]")
 
 
-
 # ──────────────────────────────────────────────────────────────────────────────
-# PCA-KNN ancestry proximity chart
+# PCA proximity ancestry chart — centroid inverse-distance weighting
 # ──────────────────────────────────────────────────────────────────────────────
 
 def _plot_pca_knn_ancestry(
     pca_results: dict, ref_dir: str, out_dir: str, n_neighbors: int = 30
 ) -> None:
     """
-    Estimate ancestry from PCA position using K nearest neighbours.
+    Estimate ancestry from the user's position in PC space.
 
-    Finds the n_neighbors closest reference samples in the full PC space
-    (all available PCs, usually 10) and reports their regional composition
-    as a horizontal bar chart.  This directly reflects the user's position
-    in the PCA scatter plots — more intuitive than ADMIXTURE-derived pie charts.
+    Method: inverse-distance weighting to REGION CENTROIDS (not individual
+    samples).  Each geographic region is represented by a single centroid
+    (mean PC coordinates of its reference samples).  The user's ancestry
+    estimate is the softmax of 1/distance to each centroid, weighted by the
+    variance explained by each PC.
+
+    This avoids the cluster-density bias of KNN (where regions with many
+    reference samples dominate regardless of true genetic proximity) and
+    directly reflects the user's position in the PCA scatter plots.
     """
-    from collections import Counter
 
     # ── Load PCA data ─────────────────────────────────────────────────────────
     if "eigenvec_df" in pca_results:
@@ -170,50 +173,68 @@ def _plot_pca_knn_ancestry(
 
     pc_cols = [c for c in df.columns if c.startswith("PC")]
 
+    # ── Load eigenvalues for variance-proportional PC weights ─────────────────
+    pc_weights = np.ones(len(pc_cols))
+    eigenval_df = pca_results.get("eigenval_df")
+    if eigenval_df is None and "eigenval" in pca_results:
+        eigenval_df = pd.read_csv(pca_results["eigenval"], header=None, names=["eigenval"])
+    if eigenval_df is not None and "eigenval" in eigenval_df.columns:
+        vals = eigenval_df["eigenval"].values[: len(pc_cols)].clip(0)
+        total = vals.sum()
+        if total > 0:
+            pc_weights = vals / total   # proportional to variance explained
+
     # ── Separate user and reference samples ───────────────────────────────────
     user_mask = df["FID"] == "USER"
     ref_mask  = ~user_mask
 
     if not user_mask.any():
-        console.print("  [yellow]PCA KNN: no USER sample found — skipping[/yellow]")
+        console.print("  [yellow]PCA proximity: no USER sample found — skipping[/yellow]")
         return
 
     user_coords = df.loc[user_mask, pc_cols].values[0]   # (n_pcs,)
-    ref_coords  = df.loc[ref_mask,  pc_cols].values       # (n_ref, n_pcs)
-    ref_iids    = df.loc[ref_mask, "IID"].values
 
     # ── Load region labels ────────────────────────────────────────────────────
     labels_df = _load_labels(ref_dir)
     if (labels_df is None
             or "sample_id" not in labels_df.columns
             or "region"    not in labels_df.columns):
-        console.print("  [yellow]PCA KNN: no region labels found — skipping[/yellow]")
+        console.print("  [yellow]PCA proximity: no region labels found — skipping[/yellow]")
         return
 
     iid_to_region = dict(zip(labels_df["sample_id"], labels_df["region"]))
+    ref_df = df.loc[ref_mask].copy()
+    ref_df["region"] = ref_df["IID"].map(iid_to_region).fillna("Unknown")
+    ref_df = ref_df[ref_df["region"] != "Unknown"]
 
-    # ── KNN in full PC space (Euclidean) ──────────────────────────────────────
-    dists = np.linalg.norm(ref_coords - user_coords, axis=1)
-    k     = min(n_neighbors, len(dists))
-    nn_idx = np.argsort(dists)[:k]
+    # ── Compute region centroids ───────────────────────────────────────────────
+    regions_present = [r for r in ref_df["region"].unique() if r != "USER"]
+    centroids: dict[str, np.ndarray] = {}
+    for region in regions_present:
+        mask = ref_df["region"] == region
+        centroids[region] = ref_df.loc[mask, pc_cols].values.mean(axis=0)
 
-    nn_regions = [iid_to_region.get(ref_iids[i], "Unknown") for i in nn_idx]
-    nn_dists   = dists[nn_idx]
+    # ── Inverse distance weighting (variance-weighted Euclidean) ──────────────
+    # d²(region) = Σ_i  w_i * (user_i - centroid_i)²
+    EPS = 1e-9
+    region_scores: dict[str, float] = {}
+    for region, centroid in centroids.items():
+        diff = user_coords - centroid
+        weighted_sq = np.sum(pc_weights * diff ** 2)
+        dist = np.sqrt(weighted_sq)
+        region_scores[region] = 1.0 / (dist + EPS)
 
-    region_counts = Counter(nn_regions)
-    total = sum(region_counts.values())
+    total_score = sum(region_scores.values())
+    ancestry = {r: v / total_score for r, v in region_scores.items()}
 
-    # ── Order regions by proximity fraction ───────────────────────────────────
-    region_order = [
-        "East_Asia", "Europe", "Middle_East", "Central_South_Asia",
-        "America", "Africa", "Oceania", "Unknown",
-    ]
-    present = [(r, region_counts[r] / total)
-               for r in region_order if r in region_counts]
-    present += [(r, v / total) for r, v in region_counts.items()
-                if r not in region_order and v > 0]
-    present = sorted(present, key=lambda x: x[1])   # ascending → longest bar on top
+    # Drop negligible regions (< 1%)
+    ancestry = {r: v for r, v in ancestry.items() if v >= 0.01}
+    if not ancestry:
+        console.print("  [yellow]PCA proximity: all proportions < 1% — skipping[/yellow]")
+        return
 
+    # Sort ascending so longest bar is on top
+    present = sorted(ancestry.items(), key=lambda x: x[1])
     regions = [r for r, _ in present]
     values  = [v for _, v in present]
     colors  = [REGION_PALETTE.get(r, REGION_PALETTE["Unknown"]) for r in regions]
@@ -243,14 +264,15 @@ def _plot_pca_knn_ancestry(
     for spine in ax.spines.values():
         spine.set_edgecolor("#30363d")
 
+    n_pcs_used = len(pc_cols)
     ax.set_title(
-        f"Ancestry by PCA Proximity  ({k} nearest neighbours, {len(pc_cols)} PCs)",
-        fontsize=13, pad=14, color="#e6edf3",
+        f"Ancestry by PCA Proximity  ({n_pcs_used} PCs, variance-weighted centroid distance)",
+        fontsize=12, pad=14, color="#e6edf3",
     )
     fig.text(
         0.5, 0.01,
-        f"Euclidean distance in {len(pc_cols)}-D PC space  ·  "
-        f"nearest: {nn_dists[0]:.4f}  ·  furthest of {k}: {nn_dists[-1]:.4f}",
+        "Inverse distance to region centroids · density-bias-free · "
+        f"{len(regions)} geographic regions",
         ha="center", fontsize=8, color="#8b949e",
     )
     fig.tight_layout(rect=[0, 0.05, 1, 1])
