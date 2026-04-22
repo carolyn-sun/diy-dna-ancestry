@@ -4,8 +4,6 @@
 
 A DIY tool for personal DNA ancestry analysis
 
-⚠️ Work in progress still
-
 ## Requirements
 
 - [Anaconda](https://www.anaconda.com/download) or [Miniconda](https://docs.conda.io/en/latest/miniconda.html)
@@ -54,18 +52,18 @@ dna run --vcf FILE [options]          # run the full pipeline
 dna plot --results DIR                # re-plot from existing results
 ```
 
-| Flag              | Default      | Description                                                      |
-| ----------------- | ------------ | ---------------------------------------------------------------- |
-| `--vcf`           | _(required)_ | Input VCF file                                                   |
+| Flag              | Default      | Description                                                                                   |
+| ----------------- | ------------ | --------------------------------------------------------------------------------------------- |
+| `--vcf`           | _(required)_ | Input VCF file                                                                                |
 | `--k`             | `3,5,7`      | ADMIXTURE K values. K=7 matches the 7 HGDP regions (recommended max). K>12 risks overfitting. |
-| `--threads`       | `4`          | Parallel threads                                                 |
-| `--out`           | `results/`   | Output directory                                                 |
-| `--geno`          | `0.05`       | Genotype missingness threshold                                   |
-| `--maf`           | `0.01`       | Minimum allele frequency                                         |
-| `--hwe`           | `1e-6`       | Hardy–Weinberg p-value cutoff                                    |
-| `--skip-plot`     | —            | Skip the plotting step                                           |
-| `--nmf-fallback`  | —            | Enable NMF approximation if ADMIXTURE crashes (see note below)   |
-| `--admixture-bin` | `admixture`  | Path to ADMIXTURE executable (override for non-default installs) |
+| `--threads`       | `4`          | Parallel threads                                                                              |
+| `--out`           | `results/`   | Output directory                                                                              |
+| `--geno`          | `0.05`       | Genotype missingness threshold                                                                |
+| `--maf`           | `0.01`       | Minimum allele frequency                                                                      |
+| `--hwe`           | `1e-6`       | Hardy–Weinberg p-value cutoff                                                                 |
+| `--skip-plot`     | —            | Skip the plotting step                                                                        |
+| `--nmf-fallback`  | —            | Enable NMF approximation if ADMIXTURE crashes (see note below)                                |
+| `--admixture-bin` | `admixture`  | Path to ADMIXTURE executable (override for non-default installs)                              |
 
 > [!WARNING]
 > If ADMIXTURE crashes with a **segfault (SIGSEGV)**, the most common cause is the
