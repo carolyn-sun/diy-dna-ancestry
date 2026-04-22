@@ -330,28 +330,6 @@ def _run_admixture_k(bed: str, k: int, out_dir: str, threads: int,
     # If all ADMIXTURE invocations crashed (segfault), optionally use NMF fallback
     all_segfaulted = (proc is not None and proc.returncode < 0)
     if all_segfaulted:
-        # Check installed ADMIXTURE version to give targeted advice
-        _admix_ver = ""
-        try:
-            _vp = subprocess.run(
-                [admixture_bin, "--version"], capture_output=True, text=True, timeout=5
-            )
-            _m = re.search(r"Version\s+([\d.]+)", (_vp.stdout + _vp.stderr))
-            if _m:
-                _admix_ver = _m.group(1)
-        except Exception:
-            pass
-
-        _upgrade_hint = ""
-        if _admix_ver == "1.3.0":
-            _upgrade_hint = (
-                "\n  ADMIXTURE 1.3.0 has a known SIGSEGV bug on modern Linux kernels."
-                "\n  Upgrade to 1.3.1 (fixes the crash):"
-                "\n    curl -fsSL https://dalexander.github.io/admixture/binaries/admixture_linux-1.3.1.tar.gz \\"
-                "\n         | tar -xz --strip-components=1 -C ~/bin/"
-                "\n    dna run --vcf your.vcf --admixture-bin ~/bin/admixture"
-            )
-
         if allow_nmf_fallback:
             console.print(
                 "  [yellow]ADMIXTURE binary crashed (SIGSEGV). "
@@ -363,13 +341,13 @@ def _run_admixture_k(bed: str, k: int, out_dir: str, threads: int,
             )
         else:
             raise RuntimeError(
-                f"ADMIXTURE K={k} crashed with a segfault (exit {proc.returncode})."
-                f"{_upgrade_hint}"
-                "\nOptions:"
-                "\n  1. Upgrade to ADMIXTURE 1.3.1 (see above)."
-                "\n  2. Re-enable the approximate NMF fallback with --nmf-fallback"
-                "\n     (results will be less accurate than true ADMIXTURE)."
-                f"\n  Log: {log_path}"
+                f"ADMIXTURE K={k} crashed with a segfault (exit {proc.returncode}).\n"
+                "This is usually caused by the default stack size limit being too small.\n"
+                "Try running with an unlimited stack before launching the pipeline:\n"
+                "  ulimit -s unlimited\n"
+                "  dna run --vcf your.vcf --k 3,5\n"
+                "Or use --nmf-fallback for an approximate result without ADMIXTURE.\n"
+                f"Log: {log_path}"
             )
 
     if proc.returncode != 0:
