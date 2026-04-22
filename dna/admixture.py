@@ -268,6 +268,31 @@ def _run_admixture_k(bed: str, k: int, out_dir: str, threads: int,
         [admixture_bin, bed_abs, str(k)],
     ]
 
+    # ── WSL: remove stack size limit to prevent SIGSEGV ──────────────────────
+    # ADMIXTURE commonly crashes on WSL because the default stack limit (8 MB)
+    # is too small.  Setting RLIMIT_STACK to unlimited before exec fixes this.
+    preexec_fn = None
+    _is_wsl = False
+    try:
+        with open("/proc/version") as _pv:
+            if "microsoft" in _pv.read().lower():
+                _is_wsl = True
+    except OSError:
+        pass
+
+    if _is_wsl:
+        import resource as _resource
+        def _remove_stack_limit():
+            try:
+                _resource.setrlimit(
+                    _resource.RLIMIT_STACK,
+                    (_resource.RLIM_INFINITY, _resource.RLIM_INFINITY),
+                )
+            except Exception:
+                pass  # non-fatal: kernel may disallow but binary may still run
+        preexec_fn = _remove_stack_limit
+        console.print("  [dim]WSL detected — stack limit removed (ulimit -s unlimited)[/dim]")
+
     proc = None
     cmd  = None
     for attempt_cmd in candidate_cmds:
@@ -279,6 +304,7 @@ def _run_admixture_k(bed: str, k: int, out_dir: str, threads: int,
                 stdout=log_fh,
                 stderr=subprocess.STDOUT,
                 cwd=str(bed_dir),
+                preexec_fn=preexec_fn,
             )
         if proc.returncode == 0:
             cmd = attempt_cmd
