@@ -6,21 +6,6 @@ A DIY tool for personal DNA ancestry analysis
 
 To be honest, this is a lazy tool with no original bioinformatics insight. It automates what you could do yourself by running PLINK and ADMIXTURE directly. If you are comfortable with the command line, you probably do not need it.
 
-## Requirements
-
-- [Anaconda](https://www.anaconda.com/download) or [Miniconda](https://docs.conda.io/en/latest/miniconda.html)
-- The `.vcf` file from a DNA test
-
-> [!NOTE]
-> **Apple Silicon:** `setup.sh` auto-sets `CONDA_SUBDIR=osx-64` so PLINK and ADMIXTURE resolve from bioconda and run transparently via Rosetta 2.
-
-## Setup
-
-```bash
-bash setup.sh
-conda activate dna-ancestry
-```
-
 ## Example and algorithm
 
 The following outputs are generated from a real DNA test file.
@@ -75,29 +60,20 @@ These two charts answer **different questions** and are best read together.
 > [!TIP]
 > As a rule of thumb: trust the **proximity chart** for an intuitive first read, and trust the **pie chart** (at the best K) for a statistically rigorous breakdown. If both give similar percentages, you can be confident in the result.
 
-## Pipelines
+## Requirements
 
-```mermaid
-flowchart TD
-    VCF["your.vcf"]
-    QC["QC & LD pruning\ngeno / maf / hwe"]
-    HGDP["HGDP reference panel\n~50k SNPs"]
-    MERGE["bmerge"]
-    ADMIX["ADMIXTURE\nK=5, 7, 9"]
-    PCA["PCA\nPC1~PC10"]
-    PLOT["matplotlib\ndark-theme PCA + bar charts"]
-
-    VCF --> QC
-    HGDP --> MERGE
-    QC --> MERGE
-    MERGE --> ADMIX
-    MERGE --> PCA
-    ADMIX --> PLOT
-    PCA --> PLOT
-```
+- [Anaconda](https://www.anaconda.com/download) or [Miniconda](https://docs.conda.io/en/latest/miniconda.html)
+- The `.vcf` file from a DNA test
 
 > [!NOTE]
-> LD pruning requires ≥2 samples and is automatically skipped for single-sample VCFs (the typical personal-use case). SNP selection is effectively handled by the HGDP merge step, which intersects your variants with the already LD-pruned reference panel.
+> **Apple Silicon:** `setup.sh` auto-sets `CONDA_SUBDIR=osx-64` so PLINK and ADMIXTURE resolve from bioconda and run transparently via Rosetta 2.
+
+## Setup
+
+```bash
+bash setup.sh
+conda activate dna-ancestry
+```
 
 ## Full commands
 
@@ -135,6 +111,30 @@ dna plot --results DIR                # re-plot from existing results
 > mathematical approximation that does not model the binomial likelihood of SNP
 > data the way ADMIXTURE does. Ancestry proportions from NMF can be misleading
 > and should **not** be used for any serious interpretation.
+
+## Pipelines
+
+```mermaid
+flowchart TD
+    VCF["your.vcf"]
+    QC["QC & LD pruning\ngeno / maf / hwe"]
+    HGDP["HGDP reference panel\n~50k SNPs"]
+    MERGE["bmerge"]
+    ADMIX["ADMIXTURE\nK=5, 7, 9"]
+    PCA["PCA\nPC1~PC10"]
+    PLOT["matplotlib\ndark-theme PCA + bar charts"]
+
+    VCF --> QC
+    HGDP --> MERGE
+    QC --> MERGE
+    MERGE --> ADMIX
+    MERGE --> PCA
+    ADMIX --> PLOT
+    PCA --> PLOT
+```
+
+> [!NOTE]
+> LD pruning requires ≥2 samples and is automatically skipped for single-sample VCFs (the typical personal-use case). SNP selection is effectively handled by the HGDP merge step, which intersects your variants with the already LD-pruned reference panel.
 
 ## Output structures
 
