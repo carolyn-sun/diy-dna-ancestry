@@ -103,7 +103,6 @@ dna plot --results DIR                # re-plot from existing results
 >
 > ```bash
 > ulimit -s unlimited
-> dna run --vcf your.vcf
 > ```
 >
 > If the crash persists, `--nmf-fallback` is available as a last resort.
