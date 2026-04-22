@@ -143,6 +143,7 @@ For the detailed gene mutation analysis, you can play with [OpenCRAVAT](https://
 ## TODO
 
 - [ ] Optional replacement: fastSTRUCTURE
+- [ ] Support for raw data
 
 ## License
 
