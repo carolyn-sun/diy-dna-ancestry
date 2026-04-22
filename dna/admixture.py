@@ -256,21 +256,47 @@ def _run_admixture_k(bed: str, k: int, out_dir: str, threads: int,
         stem = "admix_input"
 
     # ── Run ADMIXTURE ────────────────────────────────────────────────────────
-    # ADMIXTURE 1.3.0 argument order: file and K must come before flags.
-    # We try increasingly minimal invocations as fallback.
+    # ── Prepare crash mitigations ────────────────────────────────────────────
+    # (1) Remove stack size limit: ADMIXTURE 1.3 can overflow the default 8 MB
+    #     stack when processing large reference panels on some Linux kernels.
+    _preexec_fn = None
+    if os.name != "nt":
+        try:
+            import resource as _res
+            def _unlock_stack():
+                try:
+                    _res.setrlimit(
+                        _res.RLIMIT_STACK,
+                        (_res.RLIM_INFINITY, _res.RLIM_INFINITY),
+                    )
+                except Exception:
+                    pass
+            _preexec_fn = _unlock_stack
+        except ImportError:
+            pass
+
+    # (2) Candidate invocations — tried in order until one succeeds.
+    #     Each entry is (cmd_list, extra_env).
+    #     The final two entries force OMP_NUM_THREADS=1 to eliminate OpenMP
+    #     thread-pool crashes, which are the second most common SIGSEGV cause.
+    _base_env  = None                         # inherit parent env
+    _omp1_env  = {**os.environ, "OMP_NUM_THREADS": "1"}
+
     bed_abs = str(admix_bed.resolve())
     candidate_cmds = [
-        # Preferred: file K --cv -j N  (positional args first, flags after)
-        [admixture_bin, bed_abs, str(k), "--cv", "-j", str(threads)],
-        # Fallback 1: no threading flag
-        [admixture_bin, bed_abs, str(k), "--cv"],
-        # Fallback 2: bare minimum — no flags at all (CV error won't be available)
-        [admixture_bin, bed_abs, str(k)],
+        # Preferred: multi-thread with CV
+        ([admixture_bin, bed_abs, str(k), "--cv", "-j", str(threads)], _base_env),
+        # Fallback 1: no -j flag (lets ADMIXTURE choose its own thread count)
+        ([admixture_bin, bed_abs, str(k), "--cv"],                      _base_env),
+        # Fallback 2: single-threaded with CV (OMP_NUM_THREADS=1)
+        ([admixture_bin, bed_abs, str(k), "--cv"],                      _omp1_env),
+        # Fallback 3: single-threaded, no extra flags
+        ([admixture_bin, bed_abs, str(k)],                              _omp1_env),
     ]
 
     proc = None
     cmd  = None
-    for attempt_cmd in candidate_cmds:
+    for attempt_cmd, attempt_env in candidate_cmds:
         console.print(f"  [dim]$ {' '.join(attempt_cmd)}[/dim]")
         console.print(f"  [bold]Running K={k}[/bold]  (log: {log_path.name})")
         with open(log_path, "w") as log_fh:
@@ -279,6 +305,8 @@ def _run_admixture_k(bed: str, k: int, out_dir: str, threads: int,
                 stdout=log_fh,
                 stderr=subprocess.STDOUT,
                 cwd=str(bed_dir),
+                env=attempt_env,
+                preexec_fn=_preexec_fn,
             )
         if proc.returncode == 0:
             cmd = attempt_cmd
