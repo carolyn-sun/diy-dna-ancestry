@@ -65,24 +65,53 @@ REGION_PALETTE = {
 # Helpers
 # ──────────────────────────────────────────────────────────────────────────────
 
+# Map SuperPop abbreviation codes → REGION_PALETTE keys
+_SUPERPOP_TO_REGION: dict[str, str] = {
+    "AFR": "Africa",
+    "AMR": "America",
+    "EAS": "East_Asia",
+    "EUR": "Europe",
+    "CSA": "Central_South_Asia",
+    "SAS": "Central_South_Asia",
+    "MID": "Middle_East",
+    "ME":  "Middle_East",
+    "MDE": "Middle_East",
+    "OCE": "Oceania",
+}
+
+
 def _load_labels(ref_dir: str) -> pd.DataFrame | None:
-    """Load the HGDP population label table."""
+    """Load the HGDP population label table.
+
+    The Zenodo label file (hgdp_pop_labels.tsv) has columns:
+        Sample | SuperPop | Project
+    where SuperPop uses short codes (AFR, EAS, EUR, …).
+    We normalise column names and expand codes to REGION_PALETTE keys.
+    """
     label_path = Path(ref_dir) / "hgdp_pop_labels.tsv"
     if not label_path.exists():
-        console.print(f"  [dim]Label file not found, skipping population colours: {label_path}[/dim]")
+        console.print(f"  [dim]Label file not found, skipping colours: {label_path}[/dim]")
         return None
     try:
         df = pd.read_csv(label_path, sep="\t")
         col_map = {}
         for col in df.columns:
-            c = col.lower()
-            if "sample" in c or c == "id":
+            c = col.lower().replace(" ", "").replace("_", "")
+            if "sample" in c or c in ("id", "s"):
                 col_map[col] = "sample_id"
-            elif "pop" in c or "population" in c:
-                col_map[col] = "population"
+            elif "superpop" in c:
+                col_map[col] = "region"   # SuperPop IS the region here
             elif "region" in c or "continent" in c:
                 col_map[col] = "region"
-        return df.rename(columns=col_map)
+            elif "pop" in c or "population" in c:
+                col_map[col] = "population"
+        df = df.rename(columns=col_map)
+        # Expand SuperPop abbreviation → full region name expected by REGION_PALETTE
+        if "region" in df.columns:
+            df["region"] = df["region"].apply(
+                lambda x: _SUPERPOP_TO_REGION.get(str(x).upper(), str(x))
+            )
+        return df
     except Exception as e:
         console.print(f"  [yellow]Failed to read label file: {e}[/yellow]")
         return None
@@ -331,18 +360,24 @@ def make_all_plots(
     console.print("  [bold]Plot: PCA (PC3 vs PC4)[/bold]")
     _plot_pca(pca_results, ref_dir=ref_dir, out_dir=out_dir, pc_x=3, pc_y=4)
 
-    # Locate merged FAM file
+    # Locate FAM file — prefer the one stored in result (matches Q row count)
     merged_fam = None
     if admix_results:
         first = next(iter(admix_results.values()))
-        stem = Path(first["q_file"]).stem.rsplit(".", 2)[0]  # e.g. "merged"
-        for candidate in [
-            str(Path(first["q_file"]).parent / (stem + ".fam")),
-            str(Path(first["q_file"]).parent.parent / "work" / "merged.fam"),
-        ]:
-            if Path(candidate).exists():
-                merged_fam = candidate
-                break
+        # _run_admixture_k / _run_nmf_fallback embed the correct fam_file path
+        if "fam_file" in first and Path(first["fam_file"]).exists():
+            merged_fam = first["fam_file"]
+        else:
+            stem = Path(first["q_file"]).stem.rsplit(".", 2)[0]
+            for candidate in [
+                str(Path(first["q_file"]).parent / (stem + ".fam")),
+                str(Path(first["q_file"]).parent.parent / "work" / "admix_sub.fam"),
+                str(Path(first["q_file"]).parent.parent / "work" / "admix_input.fam"),
+                str(Path(first["q_file"]).parent.parent / "work" / "merged.fam"),
+            ]:
+                if Path(candidate).exists():
+                    merged_fam = candidate
+                    break
 
     for k, result in sorted(admix_results.items()):
         console.print(f"  [bold]Plot: ADMIXTURE K={k}[/bold]")

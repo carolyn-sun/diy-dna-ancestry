@@ -117,6 +117,7 @@ def _run_nmf_fallback(
         "p_file": None,
         "cv_error": None,
         "log_file": str(log_path),
+        "fam_file": str(bed_dir / f"{stem}.fam"),
     }
 
 
@@ -345,6 +346,7 @@ def _run_admixture_k(bed: str, k: int, out_dir: str, threads: int) -> dict:
         "p_file": str(raw_p) if raw_p.exists() else None,
         "cv_error": cv_error,
         "log_file": str(log_path),
+        "fam_file": str(bed_dir / f"{stem}.fam"),
     }
 
 
