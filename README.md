@@ -36,7 +36,7 @@ The following outputs are generated from a real DNA test file (~190k variants, i
 
 ### ADMIXTURE Bar Chart (K = 7)
 
-<img src="media/admixture_K7.png" width="720">
+<img src="media/admixture_K7.png">
 
 **Algorithm:** ADMIXTURE fits a binomial likelihood model assuming `K` discrete ancestral populations. Each bar represents one individual; coloured segments show the proportion of ancestry from each of the `K` inferred components. Individuals are sorted by geographic region. The user's bar (★) shows which global components contribute to their genome. K = 7 is used here because it matches the 7 HGDP geographic super-regions, giving the cleanest component-to-region correspondence.
 
