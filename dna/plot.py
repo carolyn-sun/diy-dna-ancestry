@@ -220,6 +220,7 @@ def _plot_pca(pca_results: dict, ref_dir: str, out_dir: str, pc_x: int = 1, pc_y
 _ADMIX_COLORS = [
     "#4CC9F0", "#F72585", "#7B68EE", "#F4A261", "#2A9D8F",
     "#E76F51", "#90E0EF", "#FAB5E0", "#C77DFF", "#FCC8A5",
+    "#06D6A0", "#FFD166", "#EF476F", "#118AB2", "#073B4C",
 ]
 
 
@@ -250,7 +251,15 @@ def _plot_admixture(k: int, q_file: str, fam_file: str, ref_dir: str, out_dir: s
     else:
         q_df["region"] = q_df["FID"].apply(lambda x: "USER" if x == "USER" else "Unknown")
 
-    colors  = _ADMIX_COLORS[:k]
+    # Build color list — cycle through extras if K > len(_ADMIX_COLORS)
+    if k <= len(_ADMIX_COLORS):
+        colors = _ADMIX_COLORS[:k]
+    else:
+        import matplotlib.cm as _cm
+        tab20 = [_cm.tab20(i / 20) for i in range(20)]
+        extras = ["#{:02x}{:02x}{:02x}".format(int(r*255), int(g*255), int(b*255))
+                  for r, g, b, _ in tab20]
+        colors = (_ADMIX_COLORS + extras)[:k]
     k_cols  = [f"K{i+1}" for i in range(k)]
 
     fig, ax = plt.subplots(figsize=(max(14, len(q_df) * 0.04), 5))
