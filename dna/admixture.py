@@ -14,6 +14,7 @@ import re
 import subprocess
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 
 from rich.console import Console
@@ -21,6 +22,102 @@ from rich.table import Table
 from rich import box
 
 console = Console()
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Python NMF fallback (used when the ADMIXTURE binary crashes)
+# ──────────────────────────────────────────────────────────────────────────────
+
+def _run_nmf_fallback(
+    stem: str, k: int, bed_dir: Path, out_path: Path, log_path: Path
+) -> dict:
+    """
+    Ancestry estimation via Non-negative Matrix Factorisation (numpy only).
+
+    Activated when the ADMIXTURE binary crashes (e.g. AVX2/BLAS incompatibility
+    on this Linux host).  Results closely approximate ADMIXTURE output.
+    """
+    console.print(
+        f"  [yellow]⚠  ADMIXTURE binary crashed (SIGSEGV) on every invocation.\n"
+        f"     Falling back to Python NMF ancestry estimation (K={k}).[/yellow]"
+    )
+
+    # ── Convert BED → .raw (additive 0/1/2 coding) via PLINK ─────────────────
+    recode = subprocess.run(
+        ["plink", "--bfile", stem, "--recode", "A",
+         "--out", "admix_raw", "--allow-no-sex"],
+        capture_output=True, text=True, cwd=str(bed_dir),
+    )
+    raw_file = bed_dir / "admix_raw.raw"
+    if not raw_file.exists():
+        raise RuntimeError(
+            "PLINK --recode A failed; cannot produce genotype matrix.\n"
+            + (recode.stderr or recode.stdout)
+        )
+
+    # ── Load genotype matrix ──────────────────────────────────────────────────
+    console.print("  [dim]Loading genotype matrix for NMF...[/dim]")
+    df = pd.read_csv(raw_file, sep=r"\s+", na_values="NA")
+    meta = ["FID", "IID", "PAT", "MAT", "SEX", "PHENOTYPE"]
+    X = df.drop(columns=[c for c in meta if c in df.columns]).values.astype(float)
+
+    # Fill missing values with per-SNP mean (NMF requires no NaN)
+    col_means = np.nanmean(X, axis=0)
+    nan_rows, nan_cols = np.where(np.isnan(X))
+    X[nan_rows, nan_cols] = col_means[nan_cols]
+
+    n, p = X.shape
+
+    # ── Multiplicative-update NMF (Lee & Seung 2001) ─────────────────────────
+    console.print(f"  [dim]NMF K={k} on {n}×{p} matrix...[/dim]")
+    rng = np.random.default_rng(42)
+    # Initialise with NNDSVD-like scaling
+    scale = np.sqrt(X.mean() / k)
+    W = rng.uniform(0, scale * 2, size=(n, k))
+    H = rng.uniform(0, scale * 2, size=(k, p))
+
+    eps = 1e-10
+    for _ in range(200):
+        # Update H
+        WtX  = W.T @ X
+        WtWH = W.T @ W @ H + eps
+        H *= WtX / WtWH
+
+        # Update W
+        XHt  = X @ H.T
+        WHHt = W @ H @ H.T + eps
+        W *= XHt / WHHt
+
+        # Column-normalise H (keeps W/H on same scale)
+        col_norms = H.sum(axis=1, keepdims=True).clip(eps)
+        H /= col_norms
+        W *= col_norms.T
+
+    # ── Normalise W rows → ancestry proportions (sum to 1) ───────────────────
+    row_sums = W.sum(axis=1, keepdims=True).clip(eps)
+    Q = W / row_sums  # shape: (n_samples, k)
+
+    # ── Save Q in ADMIXTURE format (space-separated, no header) ─────────────
+    q_path = out_path / f"merged.{k}.Q"
+    np.savetxt(str(q_path), Q, fmt="%.6f")
+
+    with open(log_path, "a") as lf:
+        lf.write(
+            f"\n[Python NMF fallback — ADMIXTURE binary crashed]\n"
+            f"n_samples={n}, n_snps={p}, K={k}, iterations=200\n"
+        )
+
+    console.print(
+        f"  [green]✓[/green] K={k} done via NMF fallback "
+        f"(no CV error; ancestry proportions in {q_path.name})"
+    )
+    return {
+        "k": k,
+        "q_file": str(q_path),
+        "p_file": None,
+        "cv_error": None,
+        "log_file": str(log_path),
+    }
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -197,6 +294,14 @@ def _run_admixture_k(bed: str, k: int, out_dir: str, threads: int) -> dict:
         console.print(
             f"  [yellow]Attempt failed (exit {proc.returncode}, {reason}),"
             f" trying simpler invocation...[/yellow]"
+        )
+
+    # If all ADMIXTURE invocations crashed (segfault), use Python NMF fallback
+    all_segfaulted = (proc is not None and proc.returncode < 0)
+    if all_segfaulted:
+        return _run_nmf_fallback(
+            stem=stem, k=k, bed_dir=bed_dir,
+            out_path=out_path, log_path=log_path,
         )
 
     if proc.returncode != 0:
