@@ -126,7 +126,8 @@ def _run_nmf_fallback(
 # ──────────────────────────────────────────────────────────────────────────────
 
 def _run_admixture_k(bed: str, k: int, out_dir: str, threads: int,
-                     allow_nmf_fallback: bool = False) -> dict:
+                     allow_nmf_fallback: bool = False,
+                     admixture_bin: str = "admixture") -> dict:
     """
     Run ADMIXTURE for a single K value.
 
@@ -260,11 +261,11 @@ def _run_admixture_k(bed: str, k: int, out_dir: str, threads: int,
     bed_abs = str(admix_bed.resolve())
     candidate_cmds = [
         # Preferred: file K --cv -j N  (positional args first, flags after)
-        ["admixture", bed_abs, str(k), "--cv", "-j", str(threads)],
+        [admixture_bin, bed_abs, str(k), "--cv", "-j", str(threads)],
         # Fallback 1: no threading flag
-        ["admixture", bed_abs, str(k), "--cv"],
+        [admixture_bin, bed_abs, str(k), "--cv"],
         # Fallback 2: bare minimum — no flags at all (CV error won't be available)
-        ["admixture", bed_abs, str(k)],
+        [admixture_bin, bed_abs, str(k)],
     ]
 
     proc = None
@@ -417,6 +418,7 @@ def run_admixture(
     out_dir: str,
     threads: int = 4,
     allow_nmf_fallback: bool = False,
+    admixture_bin: str = "admixture",
 ) -> dict[int, dict]:
     """
     Run ADMIXTURE for multiple K values.
@@ -430,6 +432,10 @@ def run_admixture(
                            when the ADMIXTURE binary crashes (e.g. SIGSEGV on
                            incompatible hardware).  Disabled by default because
                            NMF results are less accurate than true ADMIXTURE.
+        admixture_bin:     Path to the ADMIXTURE executable.  Defaults to
+                           'admixture' (resolved via PATH).  Override to use a
+                           32-bit build on WSL or a custom installation path,
+                           e.g. '/usr/local/bin/admixture32'.
 
     Returns:
         Dict mapping K → result dict (q_file, cv_error, log_file, ...)
@@ -441,7 +447,9 @@ def run_admixture(
         console.print(f"\n  [cyan]── ADMIXTURE K={k} ──────────────────────────────[/cyan]")
         result = _run_admixture_k(
             bed=bed, k=k, out_dir=out_dir,
-            threads=threads, allow_nmf_fallback=allow_nmf_fallback,
+            threads=threads,
+            allow_nmf_fallback=allow_nmf_fallback,
+            admixture_bin=admixture_bin,
         )
         all_results.append(result)
 

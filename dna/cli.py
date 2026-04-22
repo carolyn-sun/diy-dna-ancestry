@@ -95,8 +95,17 @@ def download(out_dir: str, force: bool):
         "Results are approximate — prefer native ADMIXTURE when possible."
     ),
 )
+@click.option(
+    "--admixture-bin", "admixture_bin", default="admixture", show_default=True,
+    help=(
+        "Path (or name) of the ADMIXTURE executable. "
+        "Use this to point at a 32-bit build on WSL, e.g. "
+        "--admixture-bin ~/bin/admixture32."
+    ),
+)
 def run(vcf: str, k_values: str, threads: int, out_dir: str, ref_dir: str,
-        geno: float, maf: float, hwe: float, skip_plot: bool, nmf_fallback: bool):
+        geno: float, maf: float, hwe: float, skip_plot: bool,
+        nmf_fallback: bool, admixture_bin: str):
     """Full pipeline: QC → merge → ADMIXTURE → PCA → plots."""
     from dna.init_env import run_check
     from dna.qc import run_qc
@@ -135,11 +144,14 @@ def run(vcf: str, k_values: str, threads: int, out_dir: str, ref_dir: str,
     console.print(f"\n[bold]3 / 5  ADMIXTURE (K = {ks})[/bold]")
     if nmf_fallback:
         console.print("  [yellow]NMF fallback mode enabled (--nmf-fallback)[/yellow]")
+    if admixture_bin != "admixture":
+        console.print(f"  [dim]ADMIXTURE binary: {admixture_bin}[/dim]")
     admix_results = run_admixture(
         bed=merged_bed, ks=ks,
         out_dir=os.path.join(out_dir, "admixture"),
         threads=threads,
         allow_nmf_fallback=nmf_fallback,
+        admixture_bin=admixture_bin,
     )
 
     console.print("\n[bold]4 / 5  PCA[/bold]")

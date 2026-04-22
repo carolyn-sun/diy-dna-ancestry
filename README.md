@@ -55,24 +55,32 @@ dna run --vcf FILE [options]          # run the full pipeline
 dna plot --results DIR                # re-plot from existing results
 ```
 
-| Flag             | Default      | Description                                                    |
-| ---------------- | ------------ | -------------------------------------------------------------- |
-| `--vcf`          | _(required)_ | Input VCF file                                                 |
-| `--k`            | `3,5`        | ADMIXTURE K values, comma-separated                            |
-| `--threads`      | `4`          | Parallel threads                                               |
-| `--out`          | `results/`   | Output directory                                               |
-| `--geno`         | `0.05`       | Genotype missingness threshold                                 |
-| `--maf`          | `0.01`       | Minimum allele frequency                                       |
-| `--hwe`          | `1e-6`       | Hardy–Weinberg p-value cutoff                                  |
-| `--skip-plot`    | —            | Skip the plotting step                                         |
-| `--nmf-fallback` | —            | Enable NMF approximation if ADMIXTURE crashes (see note below) |
+| Flag               | Default      | Description                                                    |
+| ------------------ | ------------ | -------------------------------------------------------------- |
+| `--vcf`            | _(required)_ | Input VCF file                                                 |
+| `--k`              | `3,5`        | ADMIXTURE K values, comma-separated                            |
+| `--threads`        | `4`          | Parallel threads                                               |
+| `--out`            | `results/`   | Output directory                                               |
+| `--geno`           | `0.05`       | Genotype missingness threshold                                 |
+| `--maf`            | `0.01`       | Minimum allele frequency                                       |
+| `--hwe`            | `1e-6`       | Hardy–Weinberg p-value cutoff                                  |
+| `--skip-plot`      | —            | Skip the plotting step                                         |
+| `--nmf-fallback`   | —            | Enable NMF approximation if ADMIXTURE crashes (see note below) |
+| `--admixture-bin`  | `admixture`  | Path to ADMIXTURE executable (use for WSL 32-bit binary)       |
 
 > [!WARNING]
 > `--nmf-fallback` enables a **Python NMF approximation** when the ADMIXTURE 1.3 binary
-> exits with a segfault (SIGSEGV), which can happen on certain CPU/OS combinations
-> (e.g. ARM Macs running x86 ADMIXTURE via Rosetta under some environments).
+> exits with a segfault (SIGSEGV), which can happen on certain CPU/OS combinations.
 > NMF is mathematically less rigorous than ADMIXTURE's binomial likelihood model —
 > ancestry proportions should be treated as **rough estimates only**.
+> For reliable results, run on a native x86-64 Linux system or inside Docker.
+
+> [!NOTE]
+> **WSL users:** The 64-bit ADMIXTURE binary may crash (SIGSEGV) under WSL2.
+> `setup.sh` auto-detects WSL and attempts to install a 32-bit binary to `~/bin/admixture32`.
+> If successful, use it via `--admixture-bin ~/bin/admixture32`.
+> Alternatively, use `--nmf-fallback` for an approximate result without ADMIXTURE.
+
 > For reliable results, run on a native x86-64 Linux system or inside Docker.
 
 ## Output structures
