@@ -530,56 +530,56 @@ def _plot_ancestry_pie(k: int, q_file: str, fam_file: str,
         console.print("  [yellow]Pie chart: all ancestry proportions are zero — skipping[/yellow]")
         return
 
-    # ── Draw pie chart (landscape: pie left, legend right) ────────────────────
+    # ── Draw pie chart (landscape: pie with legend anchored to the right) ──────
     labels  = list(ancestry.keys())
     values  = np.array(list(ancestry.values()))
     colors  = [REGION_PALETTE.get(r, REGION_PALETTE["Unknown"]) for r in labels]
 
-    fig, (ax_pie, ax_leg) = plt.subplots(
-        1, 2, figsize=(11, 5),
-        gridspec_kw={"width_ratios": [1, 0.55]},
-    )
+    fig, ax = plt.subplots(figsize=(8, 4))
     fig.patch.set_facecolor("#0f1117")
-    ax_pie.set_facecolor("#0f1117")
-    ax_leg.set_facecolor("#0f1117")
-    ax_leg.axis("off")
+    ax.set_facecolor("#0f1117")
 
-    wedges, texts, autotexts = ax_pie.pie(
+    wedges, texts, autotexts = ax.pie(
         values,
         labels=None,
         colors=colors,
         autopct=lambda p: f"{p:.1f}%" if p > 2 else "",
         startangle=140,
         wedgeprops={"linewidth": 1.5, "edgecolor": "#0f1117"},
-        pctdistance=0.75,
+        pctdistance=0.72,
+        radius=0.92,
     )
     for at in autotexts:
-        at.set_fontsize(10)
+        at.set_fontsize(9)
         at.set_color("white")
         at.set_fontweight("bold")
 
     legend_labels = [f"{r.replace('_', ' ')}  {v*100:.1f}%" for r, v in zip(labels, values)]
-    ax_leg.legend(
+    ax.legend(
         wedges, legend_labels,
         loc="center left",
-        bbox_to_anchor=(0.0, 0.5),
+        bbox_to_anchor=(1.02, 0.5),
         ncol=1,
-        fontsize=11,
+        fontsize=10,
         framealpha=0.0,
         edgecolor="#30363d",
         labelcolor="#e6edf3",
+        handlelength=1.2,
+        handleheight=1.0,
+        labelspacing=0.45,
     )
 
-    ax_pie.set_title(
+    ax.set_title(
         f"Estimated Ancestry Composition (K={k})",
-        fontsize=14, pad=14, color="#e6edf3",
+        fontsize=13, pad=10, color="#e6edf3",
     )
     fig.text(
-        0.5, 0.02,
+        0.42, 0.02,
         "Components assigned to dominant reference population per region",
-        ha="center", fontsize=8, color="#8b949e",
+        ha="center", fontsize=7.5, color="#8b949e",
     )
-    fig.tight_layout()
+    fig.tight_layout(rect=[0, 0.04, 0.72, 1])
+
     _save(fig, str(Path(out_dir) / f"ancestry_pie_K{k}.png"))
 
 
