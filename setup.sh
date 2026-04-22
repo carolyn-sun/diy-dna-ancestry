@@ -50,16 +50,6 @@ ARCH=$(uname -m)
 OS=$(uname -s)
 info "Platform: $OS / $ARCH"
 
-# Detect WSL (Windows Subsystem for Linux)
-IS_WSL=false
-if grep -qi microsoft /proc/version 2>/dev/null; then
-    IS_WSL=true
-    warn "WSL (Windows Subsystem for Linux) detected."
-    warn "The ADMIXTURE 1.3 64-bit binary may crash (SIGSEGV) under WSL."
-    warn "setup.sh will automatically try to install a 32-bit fallback binary after env creation."
-    echo ""
-fi
-
 # Apple Silicon: plink & admixture are x86_64-only on bioconda.
 # Force osx-64 subdir so conda fetches the x86_64 packages (runs via Rosetta 2).
 if [ "$OS" == "Darwin" ] && [ "$ARCH" == "arm64" ]; then
@@ -126,87 +116,6 @@ else
     warn "ADMIXTURE not found in environment"
 fi
 
-# ── WSL: always install 32-bit ADMIXTURE ─────────────────────────────────────
-ADMIXTURE32_PATH=""
-if $IS_WSL; then
-    header "WSL: Installing 32-bit ADMIXTURE binary"
-
-    info "WSL detected — installing 32-bit admixture binary unconditionally."
-    info "The 64-bit ADMIXTURE 1.3 binary commonly crashes (SIGSEGV) under WSL."
-    echo ""
-
-    _install_admixture_wsl() {
-        local DEST="${HOME}/bin/admixture"
-        mkdir -p "${HOME}/bin"
-        local TMP_DIR; TMP_DIR=$(mktemp -d)
-
-        # ADMIXTURE 1.3.1 is the preferred binary for WSL2 (requires kernel ≥3.17,
-        # WSL2 uses 5.x so this is always satisfied).
-        # ADMIXTURE 1.3.0 is kept as a fallback.
-        # Note: no official 32-bit Linux binary exists; the WSL SIGSEGV fix is
-        # ulimit -s unlimited (set below) combined with a recent kernel.
-        local URLS=(
-            "https://dalexander.github.io/admixture/binaries/admixture_linux-1.3.1.tar.gz"
-            "https://dalexander.github.io/admixture/binaries/admixture_linux-1.3.0.tar.gz"
-        )
-
-        for URL in "${URLS[@]}"; do
-            info "Downloading $(basename $URL) ..."
-            if curl -fsSL "$URL" -o "${TMP_DIR}/admixture.tar.gz" 2>/dev/null; then
-                tar -xzf "${TMP_DIR}/admixture.tar.gz" -C "$TMP_DIR" 2>/dev/null || true
-                local BIN; BIN=$(find "$TMP_DIR" -name admixture -type f | head -1)
-                if [ -n "$BIN" ]; then
-                    cp "$BIN" "$DEST"
-                    chmod +x "$DEST"
-                    rm -rf "$TMP_DIR"
-                    echo "$DEST"
-                    return 0
-                fi
-            fi
-            warn "  $URL failed, trying next..."
-        done
-
-        rm -rf "$TMP_DIR"
-        return 1
-    }
-
-    # Install 32-bit runtime libs (Ubuntu/Debian-based WSL distros)
-    if command -v apt-get &>/dev/null; then
-        info "Installing 32-bit runtime libraries (may need sudo)..."
-        sudo apt-get install -y lib32gcc-s1 libc6-i386 2>/dev/null || \
-            warn "  Could not install lib32 (skipping; binary may still work)"
-    fi
-
-    ADMIXTURE32_PATH=$(_install_admixture_wsl)
-    if [ -n "$ADMIXTURE32_PATH" ]; then
-        # ── Verify ELF class (byte 4 of ELF header: 01=32-bit, 02=64-bit) ──
-        ELF_CLASS=$(python3 -c "
-import sys
-try:
-    with open('$ADMIXTURE32_PATH', 'rb') as f:
-        f.seek(4)
-        b = f.read(1)
-        sys.stdout.write('32' if b == b'\x01' else '64')
-except Exception:
-    sys.stdout.write('unknown')
-" 2>/dev/null)
-
-        if [ "$ELF_CLASS" = "32" ]; then
-            success "32-bit admixture installed: $ADMIXTURE32_PATH  [ELF 32-bit ✓]"
-        elif [ "$ELF_CLASS" = "64" ]; then
-            warn "Downloaded binary is 64-bit (ELF 64-bit) — bioconda linux-32 may be unavailable."
-            warn "It may still work if WSL's kernel supports the 64-bit binary."
-            warn "If it crashes, use --nmf-fallback instead."
-            success "Admixture binary installed (64-bit): $ADMIXTURE32_PATH"
-        else
-            success "Admixture binary installed: $ADMIXTURE32_PATH  [ELF class: unknown]"
-        fi
-    else
-        warn "Could not automatically install 32-bit admixture."
-        warn "Use --nmf-fallback as an alternative (see README)."
-    fi
-fi
-
 # ── Summary ───────────────────────────────────────────────────────────────────
 echo ""
 echo -e "${BOLD}${CYAN}══════════════════════════════════════════${NC}"
@@ -232,17 +141,5 @@ echo -e "  Next steps:"
 echo -e "    ${CYAN}conda activate ${ENV_NAME}${NC}"
 echo -e "    ${CYAN}dna init${NC}                              # detailed environment check"
 echo -e "    ${CYAN}dna download${NC}                          # download HGDP reference panel"
-
-if [ -n "${ADMIXTURE32_PATH:-}" ]; then
-    echo -e "    ${YELLOW}# WSL: use 32-bit admixture binary (64-bit crashed):${NC}"
-    echo -e "    ${CYAN}dna run --vcf your.vcf --k 3,5 --admixture-bin ${ADMIXTURE32_PATH}${NC}"
-elif $IS_WSL && $ADMIXTURE_OK; then
-    echo -e "    ${CYAN}dna run --vcf your.vcf --k 3,5${NC}"
-    echo -e "    ${YELLOW}# If ADMIXTURE crashes (SIGSEGV), try:${NC}"
-    echo -e "    ${CYAN}dna run --vcf your.vcf --k 3,5 --admixture-bin ~/bin/admixture32${NC}"
-    echo -e "    ${YELLOW}# or use the NMF approximation:${NC}"
-    echo -e "    ${CYAN}dna run --vcf your.vcf --k 3,5 --nmf-fallback${NC}"
-else
-    echo -e "    ${CYAN}dna run --vcf your.vcf --k 3,5${NC}"
-fi
+echo -e "    ${CYAN}dna run --vcf your.vcf --k 3,5${NC}"
 echo ""

@@ -12,8 +12,7 @@ A DIY tool for personal DNA ancestry analysis
 - The `.vcf` file from a DNA test
 
 > [!NOTE]
-> **Apple Silicon** `setup.sh` auto-sets `CONDA_SUBDIR=osx-64` so PLINK and ADMIXTURE resolve from bioconda and run transparently via Rosetta 2.
-> **Windows** ADMIXTURE has no official Windows binary, so use WSL2.
+> **Apple Silicon:** `setup.sh` auto-sets `CONDA_SUBDIR=osx-64` so PLINK and ADMIXTURE resolve from bioconda and run transparently via Rosetta 2.
 
 ## Setup
 
@@ -21,6 +20,10 @@ A DIY tool for personal DNA ancestry analysis
 bash setup.sh
 conda activate dna-ancestry
 ```
+
+> [!WARNING]
+> **WSL (Windows Subsystem for Linux):** ADMIXTURE 1.3 may crash with SIGSEGV under WSL2.
+> Use `--nmf-fallback` as a workaround, or run natively on Linux/macOS.
 
 ## Pipelines
 
@@ -66,21 +69,14 @@ dna plot --results DIR                # re-plot from existing results
 | `--hwe`            | `1e-6`       | Hardy–Weinberg p-value cutoff                                  |
 | `--skip-plot`      | —            | Skip the plotting step                                         |
 | `--nmf-fallback`   | —            | Enable NMF approximation if ADMIXTURE crashes (see note below) |
-| `--admixture-bin`  | `admixture`  | Path to ADMIXTURE executable (use for WSL 32-bit binary)       |
+| `--admixture-bin`  | `admixture`  | Path to ADMIXTURE executable (override for non-default installs) |
 
 > [!WARNING]
 > `--nmf-fallback` enables a **Python NMF approximation** when the ADMIXTURE 1.3 binary
-> exits with a segfault (SIGSEGV), which can happen on certain CPU/OS combinations.
+> exits with a segfault (SIGSEGV), which can happen on certain CPU/OS combinations
+> (e.g. WSL2, or ARM Macs under some Rosetta configurations).
 > NMF is mathematically less rigorous than ADMIXTURE's binomial likelihood model —
 > ancestry proportions should be treated as **rough estimates only**.
-> For reliable results, run on a native x86-64 Linux system or inside Docker.
-
-> [!NOTE]
-> **WSL users:** The 64-bit ADMIXTURE binary may crash (SIGSEGV) under WSL2.
-> `setup.sh` auto-detects WSL and attempts to install a 32-bit binary to `~/bin/admixture32`.
-> If successful, use it via `--admixture-bin ~/bin/admixture32`.
-> Alternatively, use `--nmf-fallback` for an approximate result without ADMIXTURE.
-
 > For reliable results, run on a native x86-64 Linux system or inside Docker.
 
 ## Output structures
