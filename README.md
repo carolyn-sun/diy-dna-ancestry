@@ -77,6 +77,26 @@ The following outputs are generated from a real DNA test file.
 
 **Algorithm:** After ADMIXTURE runs at multiple K values, the K with the **lowest cross-validation (CV) error** is selected automatically. The pie chart is generated only for that best K. Each ADMIXTURE component is mapped to geographic regions using **soft assignment**: the component's mean Q-values across reference populations are used as weights, so a component that loads on multiple regions is split proportionally rather than hard-assigned to a single winner.
 
+### Interpreting the results — Proximity chart vs Pie chart
+
+These two charts answer **different questions** and are best read together.
+
+|                                     | **Ancestry by PCA Proximity**                                      | **Ancestry Pie Chart (ADMIXTURE)**                                                             |
+| ----------------------------------- | ------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------- |
+| Question answered                   | "Which region's average genome is geometrically closest to yours?" | "What fraction of your genome's SNP frequencies can be explained by each ancestral component?" |
+| Data used                           | Top 10 PCs (summary of all SNPs)                                   | All ~20,000 SNPs directly                                                                      |
+| Statistical model                   | Inverse distance to region centroids                               | Binomial likelihood (admixture model)                                                          |
+| Affected by K choice                | No                                                                 | Yes — wrong K inflates some regions                                                            |
+| Affected by reference panel density | No (centroid-based, density-bias-free)                             | No                                                                                             |
+| Academic standard                   | No                                                                 | Yes                                                                                            |
+
+**When they agree:** the result is reliable — both geometric proximity and allele-frequency modelling point to the same ancestry profile.
+
+**When they disagree:** check the K value (use the one with the lowest CV error) and inspect the ADMIXTURE bar chart. A large "Africa" or "America" slice in the pie chart at low K (e.g. K=5) is usually a sign of K being too small; the proximity chart is more stable in this case.
+
+> [!TIP]
+> As a rule of thumb: trust the **proximity chart** for an intuitive first read, and trust the **pie chart** (at the best K) for a statistically rigorous breakdown. If both give similar percentages, you can be confident in the result.
+
 ## Full commands
 
 ```
