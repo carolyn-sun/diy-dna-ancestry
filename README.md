@@ -21,9 +21,6 @@ bash setup.sh
 conda activate dna-ancestry
 ```
 
-> [!WARNING]
-> **WSL (Windows Subsystem for Linux):** ADMIXTURE 1.3 may crash with SIGSEGV under WSL2.
-> Use `--nmf-fallback` as a workaround, or run natively on Linux/macOS.
 
 ## Pipelines
 
@@ -73,8 +70,7 @@ dna plot --results DIR                # re-plot from existing results
 
 > [!WARNING]
 > `--nmf-fallback` enables a **Python NMF approximation** when the ADMIXTURE 1.3 binary
-> exits with a segfault (SIGSEGV), which can happen on certain CPU/OS combinations
-> (e.g. WSL2, or ARM Macs under some Rosetta configurations).
+> exits with a segfault (SIGSEGV), which can happen on certain CPU/OS combinations.
 > NMF is mathematically less rigorous than ADMIXTURE's binomial likelihood model —
 > ancestry proportions should be treated as **rough estimates only**.
 > For reliable results, run on a native x86-64 Linux system or inside Docker.

@@ -268,18 +268,6 @@ def _run_admixture_k(bed: str, k: int, out_dir: str, threads: int,
         [admixture_bin, bed_abs, str(k)],
     ]
 
-    # Warn if running under WSL — ADMIXTURE 1.3 may crash with SIGSEGV.
-    # Use --nmf-fallback as a workaround if it does.
-    try:
-        with open("/proc/version") as _pv:
-            if "microsoft" in _pv.read().lower():
-                console.print(
-                    "  [yellow]⚠ WSL detected: ADMIXTURE 1.3 may crash (SIGSEGV). "
-                    "Use --nmf-fallback if it does.[/yellow]"
-                )
-    except OSError:
-        pass
-
     proc = None
     cmd  = None
     for attempt_cmd in candidate_cmds:
