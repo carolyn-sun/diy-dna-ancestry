@@ -77,8 +77,12 @@ def download(out_dir: str, force: bool):
     help="Input VCF file path"
 )
 @click.option(
-    "--k", "k_values", default="3,5", show_default=True,
-    help="ADMIXTURE K values, comma-separated (e.g. 3,5 or 2,3,4,5)"
+    "--k", "k_values", default="3,5,7", show_default=True,
+    help=(
+        "ADMIXTURE K values, comma-separated. "
+        "K=7 matches the 7 HGDP geographic regions and gives the most accurate "
+        "regional ancestry breakdown. K>12 risks overfitting with this reference panel."
+    )
 )
 @click.option("--threads", default=4, show_default=True, help="Number of parallel threads")
 @click.option("--out", "out_dir", default="results", show_default=True, help="Output directory")
@@ -97,11 +101,7 @@ def download(out_dir: str, force: bool):
 )
 @click.option(
     "--admixture-bin", "admixture_bin", default="admixture", show_default=True,
-    help=(
-        "Path (or name) of the ADMIXTURE executable. "
-        "Use this to point at a 32-bit build on WSL, e.g. "
-        "--admixture-bin ~/bin/admixture32."
-    ),
+    help="Path (or name) of the ADMIXTURE executable (override for non-default installs).",
 )
 def run(vcf: str, k_values: str, threads: int, out_dir: str, ref_dir: str,
         geno: float, maf: float, hwe: float, skip_plot: bool,
