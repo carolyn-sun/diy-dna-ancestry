@@ -100,6 +100,16 @@ results/
     └── admixture_K*.log
 ```
 
+> [!NOTE]
+> **Choosing the right K:** The pipeline runs ADMIXTURE at multiple K values and outputs a
+> `cv_error.png` cross-validation error curve. **Use the K with the lowest CV error** as your
+> primary result — that K best fits the data without overfitting. Read the ancestry bar chart
+> and pie chart for that K; results at other K values are shown for comparison only.
+>
+> If the CV error curve keeps decreasing with no clear minimum, try adding larger K values
+> (e.g. `--k 5,7,9,11`). If it has multiple minima, prefer the smallest K at a local minimum
+> (simpler model, less prone to spurious population splits).
+
 ## Reference panel
 
 - Dataset: HGDP + 1KG from [gnomAD v3.1.2](https://gnomad.broadinstitute.org/downloads#v3-hgdp-1kg)
