@@ -194,31 +194,71 @@ def run(vcf: str, k_values: str, threads: int, out_dir: str, ref_dir: str,
 def plot(results_dir: str, ref_dir: str):
     """Re-plot from existing results (no need to re-run the analysis)."""
     from dna.plot import make_all_plots
-    import os, glob
+    import os, glob, re
 
-    q_files = glob.glob(os.path.join(results_dir, "admixture", "*.Q"))
-    admix_results = {}
+    admix_dir = os.path.join(results_dir, "admixture")
+
+    # ── Locate Q files ────────────────────────────────────────────────────────
+    q_files = glob.glob(os.path.join(admix_dir, "*.Q"))
+    if not q_files:
+        console.print(f"[red]No .Q files found in {admix_dir}[/red]")
+        sys.exit(1)
+
+    # ── Locate FAM file (try several common locations) ────────────────────────
+    fam_candidates = (
+        glob.glob(os.path.join(admix_dir, "*.fam"))
+        + glob.glob(os.path.join(results_dir, "work", "*.fam"))
+    )
+    merged_fam = fam_candidates[0] if fam_candidates else None
+    if merged_fam is None:
+        console.print(
+            "[yellow]Warning: no .fam file found — bar charts and pie chart will be skipped[/yellow]"
+        )
+
+    # ── Parse CV errors from log files ────────────────────────────────────────
+    def _parse_cv(k: int) -> float | None:
+        for log in glob.glob(os.path.join(admix_dir, f"*{k}*.log")):
+            try:
+                text = open(log).read()
+                m = re.search(r"CV error.*?:\s*([0-9.]+)", text)
+                if m:
+                    return float(m.group(1))
+            except Exception:
+                pass
+        return None
+
+    # ── Build admix_results in the format make_all_plots expects ─────────────
+    admix_results: dict[int, dict] = {}
     for qf in q_files:
         stem = os.path.basename(qf)
         try:
             k = int(stem.split(".")[-2])
-            admix_results[k] = qf
         except (ValueError, IndexError):
-            pass
+            continue
+        admix_results[k] = {
+            "q_file":   qf,
+            "fam_file": merged_fam,
+            "cv_error": _parse_cv(k),
+        }
 
+    # ── Locate PCA files ──────────────────────────────────────────────────────
     pca_eigenvec = os.path.join(results_dir, "pca", "pca.eigenvec")
     if not os.path.exists(pca_eigenvec):
         console.print(f"[red]PCA results not found: {pca_eigenvec}[/red]")
         sys.exit(1)
 
     make_all_plots(
-        pca_results={"eigenvec": pca_eigenvec, "eigenval": pca_eigenvec.replace(".eigenvec", ".eigenval")},
+        pca_results={
+            "eigenvec": pca_eigenvec,
+            "eigenval": pca_eigenvec.replace(".eigenvec", ".eigenval"),
+        },
         admix_results=admix_results,
         ref_dir=ref_dir,
         user_vcf=None,
         out_dir=results_dir,
     )
     console.print(f"[green]Plots saved to: {os.path.abspath(results_dir)}[/green]")
+
 
 
 if __name__ == "__main__":
