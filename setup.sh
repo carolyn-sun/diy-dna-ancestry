@@ -126,50 +126,28 @@ else
     warn "ADMIXTURE not found in environment"
 fi
 
-# ── WSL: test admixture & install 32-bit fallback if needed ──────────────────
+# ── WSL: always install 32-bit ADMIXTURE ─────────────────────────────────────
 ADMIXTURE32_PATH=""
-if $IS_WSL && $ADMIXTURE_OK; then
-    header "WSL: Testing ADMIXTURE binary compatibility"
+if $IS_WSL; then
+    header "WSL: Installing 32-bit ADMIXTURE binary"
 
-    # Quick crash test: run admixture with no args (expect exit 1, not -11/SIGSEGV)
-    conda run -n "$ENV_NAME" admixture --version >/dev/null 2>&1
-    ADMIX_EXIT=$?
+    info "WSL detected — installing 32-bit admixture binary unconditionally."
+    info "The 64-bit ADMIXTURE 1.3 binary commonly crashes (SIGSEGV) under WSL."
+    echo ""
 
-    # Negative exit code = killed by signal (SIGSEGV = -11)
-    if [ "$ADMIX_EXIT" -lt 0 ] 2>/dev/null || [ "$ADMIX_EXIT" -eq 139 ]; then
-        warn "ADMIXTURE 64-bit binary crashed under WSL (exit $ADMIX_EXIT)."
-        warn "Attempting to install a 32-bit static binary as a fallback..."
-        echo ""
+    _install_admixture32() {
+        local DEST="${HOME}/bin/admixture32"
+        mkdir -p "${HOME}/bin"
 
-        _install_admixture32() {
-            local DEST="${HOME}/bin/admixture32"
-            mkdir -p "${HOME}/bin"
+        # Primary: bioconda linux-32 conda package (extract binary directly)
+        local PKG_URL="https://conda.anaconda.org/bioconda/linux-32/admixture-1.3.0-0.tar.bz2"
+        local TMP_DIR; TMP_DIR=$(mktemp -d)
 
-            # Primary: bioconda linux-32 conda package (extract binary directly)
-            local PKG_URL="https://conda.anaconda.org/bioconda/linux-32/admixture-1.3.0-0.tar.bz2"
-            local TMP_DIR; TMP_DIR=$(mktemp -d)
-
-            info "Downloading 32-bit ADMIXTURE package..."
-            if curl -fsSL "$PKG_URL" -o "${TMP_DIR}/admixture32.tar.bz2" 2>/dev/null; then
-                # conda packages are bz2-compressed tarballs; extract the bin/admixture file
-                if tar -xjf "${TMP_DIR}/admixture32.tar.bz2" -C "$TMP_DIR" \
-                        --wildcards '*/admixture' 2>/dev/null; then
-                    local BIN; BIN=$(find "$TMP_DIR" -name admixture -type f | head -1)
-                    if [ -n "$BIN" ]; then
-                        cp "$BIN" "$DEST"
-                        chmod +x "$DEST"
-                        rm -rf "$TMP_DIR"
-                        echo "$DEST"
-                        return 0
-                    fi
-                fi
-            fi
-
-            # Fallback: official ADMIXTURE download page (64-bit, but try anyway)
-            warn "  32-bit package download failed; trying official 64-bit binary..."
-            local OFFICIAL_URL="https://dalexander.github.io/admixture/binaries/admixture_linux-1.3.0.tar.gz"
-            if curl -fsSL "$OFFICIAL_URL" -o "${TMP_DIR}/admixture.tar.gz" 2>/dev/null; then
-                tar -xzf "${TMP_DIR}/admixture.tar.gz" -C "$TMP_DIR" 2>/dev/null || true
+        info "Downloading 32-bit ADMIXTURE package..."
+        if curl -fsSL "$PKG_URL" -o "${TMP_DIR}/admixture32.tar.bz2" 2>/dev/null; then
+            # conda packages are bz2-compressed tarballs; extract the bin/admixture file
+            if tar -xjf "${TMP_DIR}/admixture32.tar.bz2" -C "$TMP_DIR" \
+                    --wildcards '*/admixture' 2>/dev/null; then
                 local BIN; BIN=$(find "$TMP_DIR" -name admixture -type f | head -1)
                 if [ -n "$BIN" ]; then
                     cp "$BIN" "$DEST"
@@ -179,27 +157,40 @@ if $IS_WSL && $ADMIXTURE_OK; then
                     return 0
                 fi
             fi
-
-            rm -rf "$TMP_DIR"
-            return 1
-        }
-
-        # Install 32-bit support libs (Ubuntu/Debian-based WSL)
-        if command -v apt-get &>/dev/null; then
-            info "Installing 32-bit runtime libraries (may need sudo)..."
-            sudo apt-get install -y lib32gcc-s1 libc6-i386 2>/dev/null || \
-                warn "  Could not install lib32 (skipping; binary may still work)"
         fi
 
-        ADMIXTURE32_PATH=$(_install_admixture32)
-        if [ -n "$ADMIXTURE32_PATH" ]; then
-            success "32-bit admixture installed: $ADMIXTURE32_PATH"
-        else
-            warn "Could not automatically install 32-bit admixture."
-            warn "Use --nmf-fallback as an alternative (see README)."
+        # Fallback: official ADMIXTURE Linux binary (64-bit static build)
+        warn "  32-bit package download failed; trying official Linux binary..."
+        local OFFICIAL_URL="https://dalexander.github.io/admixture/binaries/admixture_linux-1.3.0.tar.gz"
+        if curl -fsSL "$OFFICIAL_URL" -o "${TMP_DIR}/admixture.tar.gz" 2>/dev/null; then
+            tar -xzf "${TMP_DIR}/admixture.tar.gz" -C "$TMP_DIR" 2>/dev/null || true
+            local BIN; BIN=$(find "$TMP_DIR" -name admixture -type f | head -1)
+            if [ -n "$BIN" ]; then
+                cp "$BIN" "$DEST"
+                chmod +x "$DEST"
+                rm -rf "$TMP_DIR"
+                echo "$DEST"
+                return 0
+            fi
         fi
+
+        rm -rf "$TMP_DIR"
+        return 1
+    }
+
+    # Install 32-bit runtime libs (Ubuntu/Debian-based WSL distros)
+    if command -v apt-get &>/dev/null; then
+        info "Installing 32-bit runtime libraries (may need sudo)..."
+        sudo apt-get install -y lib32gcc-s1 libc6-i386 2>/dev/null || \
+            warn "  Could not install lib32 (skipping; binary may still work)"
+    fi
+
+    ADMIXTURE32_PATH=$(_install_admixture32)
+    if [ -n "$ADMIXTURE32_PATH" ]; then
+        success "32-bit admixture installed: $ADMIXTURE32_PATH"
     else
-        success "ADMIXTURE 64-bit binary runs correctly under this WSL environment."
+        warn "Could not automatically install 32-bit admixture."
+        warn "Use --nmf-fallback as an alternative (see README)."
     fi
 fi
 
