@@ -8,7 +8,7 @@ To be honest, this is a lazy tool with no original bioinformatics insight. It au
 
 ## Example and algorithm
 
-The following outputs are generated from a real DNA test file.
+The following outputs are generated from a real DNA test file (~190k variants, iWES, nuclear genome 129.38X average depth, 99.64% at ≥20X coverage).
 
 ### PCA: PC1 vs PC2
 
