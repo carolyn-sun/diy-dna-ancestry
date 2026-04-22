@@ -27,7 +27,7 @@ flowchart TD
     QC["QC & LD pruning\ngeno / maf / hwe"]
     HGDP["HGDP reference panel\n~50k SNPs"]
     MERGE["bmerge"]
-    ADMIX["ADMIXTURE\nK=3, K=5"]
+    ADMIX["ADMIXTURE\nK=5, 7, 9"]
     PCA["PCA\nPC1~PC10"]
     PLOT["matplotlib\ndark-theme PCA + bar charts"]
 
@@ -71,7 +71,7 @@ dna plot --results DIR                # re-plot from existing results
 >
 > ```bash
 > ulimit -s unlimited
-> dna run --vcf your.vcf --k 3,5
+> dna run --vcf your.vcf
 > ```
 >
 > If the crash persists, `--nmf-fallback` is available as a last resort.
@@ -84,19 +84,21 @@ dna plot --results DIR                # re-plot from existing results
 
 ```
 results/
-├── pca_PC1_PC2.png       # PCA scatter plot (PC1 vs PC2)
-├── pca_PC3_PC4.png       # PCA scatter plot (PC3 vs PC4)
-├── admixture_K3.png      # ADMIXTURE bar chart, K=3
-├── admixture_K5.png      # ADMIXTURE bar chart, K=5
-├── ancestry_pie_K3.png   # Ancestry pie chart, K=3
-├── ancestry_pie_K5.png   # Ancestry pie chart, K=5
-├── cv_error.png          # CV error curve (best-K selection)
+├── pca_PC1_PC2.png          # PCA scatter plot (PC1 vs PC2)
+├── pca_PC3_PC4.png          # PCA scatter plot (PC3 vs PC4)
+├── pca_ancestry_knn.png     # Ancestry by PCA proximity (K nearest neighbours)
+├── admixture_K5.png         # ADMIXTURE bar chart, K=5
+├── admixture_K7.png         # ADMIXTURE bar chart, K=7
+├── admixture_K9.png         # ADMIXTURE bar chart, K=9
+├── ancestry_pie_K?.png      # Ancestry pie chart — best K only (lowest CV error)
+├── cv_error.png             # CV error curve (best-K selection)
 ├── pca/
 │   ├── pca.eigenvec
 │   └── pca.eigenval
 └── admixture/
-    ├── merged.3.Q
-    ├── merged.5.Q
+    ├── admix.5.Q
+    ├── admix.7.Q
+    ├── admix.9.Q
     └── admixture_K*.log
 ```
 

@@ -641,20 +641,40 @@ def make_all_plots(
                 if Path(candidate).exists():
                     merged_fam = candidate
                     break
+    # ── Determine best K (lowest CV error) — pie chart only for this K ──────
+    best_k: int | None = None
+    if admix_results:
+        ks_with_cv = {k: r["cv_error"] for k, r in admix_results.items()
+                      if r.get("cv_error") is not None}
+        if ks_with_cv:
+            best_k = min(ks_with_cv, key=ks_with_cv.__getitem__)
+        else:
+            best_k = max(admix_results.keys())
 
     for k, result in sorted(admix_results.items()):
         console.print(f"  [bold]Plot: ADMIXTURE K={k}[/bold]")
         if merged_fam:
             _plot_admixture(k=k, q_file=result["q_file"], fam_file=merged_fam,
                             ref_dir=ref_dir, out_dir=out_dir)
-            console.print(f"  [bold]Plot: Ancestry pie K={k}[/bold]")
-            _plot_ancestry_pie(k=k, q_file=result["q_file"], fam_file=merged_fam,
-                               ref_dir=ref_dir, out_dir=out_dir)
+            if k == best_k:
+                console.print(
+                    f"  [bold]Plot: Ancestry pie K={k}[/bold]"
+                    " [green](best K — lowest CV error)[/green]"
+                )
+                _plot_ancestry_pie(k=k, q_file=result["q_file"], fam_file=merged_fam,
+                                   ref_dir=ref_dir, out_dir=out_dir)
         else:
-            console.print(f"  [yellow]merged.fam not found — skipping K={k} bar chart[/yellow]")
+            console.print(
+                f"  [yellow]merged.fam not found — skipping K={k} bar chart[/yellow]"
+            )
 
     if len(admix_results) > 1:
         console.print("  [bold]Plot: CV Error curve[/bold]")
         _plot_cv_error(admix_results, out_dir=out_dir)
 
     console.print(f"\n  [bold green]All plots saved to: {os.path.abspath(out_dir)}[/bold green]")
+    if best_k is not None:
+        console.print(
+            f"  [dim]Best K = {best_k} (lowest CV error) — "
+            "use this K's pie chart as the primary ancestry estimate.[/dim]"
+        )
