@@ -54,18 +54,25 @@ dna run --vcf FILE [options]          # run the full pipeline
 dna plot --results DIR                # re-plot from existing results
 ```
 
-**`dna run` options**
+| Flag             | Default      | Description                                                         |
+| ---------------- | ------------ | ------------------------------------------------------------------- |
+| `--vcf`          | _(required)_ | Input VCF file                                                      |
+| `--k`            | `3,5`        | ADMIXTURE K values, comma-separated                                 |
+| `--threads`      | `4`          | Parallel threads                                                    |
+| `--out`          | `results/`   | Output directory                                                    |
+| `--geno`         | `0.05`       | Genotype missingness threshold                                      |
+| `--maf`          | `0.01`       | Minimum allele frequency                                            |
+| `--hwe`          | `1e-6`       | Hardy–Weinberg p-value cutoff                                       |
+| `--skip-plot`    | —            | Skip the plotting step                                              |
+| `--nmf-fallback` | —            | Enable NMF approximation if ADMIXTURE crashes (see note below)      |
 
-| Flag          | Default      | Description                         |
-| ------------- | ------------ | ----------------------------------- |
-| `--vcf`       | _(required)_ | Input VCF file                      |
-| `--k`         | `3,5`        | ADMIXTURE K values, comma-separated |
-| `--threads`   | `4`          | Parallel threads                    |
-| `--out`       | `results/`   | Output directory                    |
-| `--geno`      | `0.05`       | Genotype missingness threshold      |
-| `--maf`       | `0.01`       | Minimum allele frequency            |
-| `--hwe`       | `1e-6`       | Hardy–Weinberg p-value cutoff       |
-| `--skip-plot` | —            | Skip the plotting step              |
+> [!WARNING]
+> `--nmf-fallback` enables a **Python NMF approximation** when the ADMIXTURE 1.3 binary
+> exits with a segfault (SIGSEGV), which can happen on certain CPU/OS combinations
+> (e.g. ARM Macs running x86 ADMIXTURE via Rosetta under some environments).
+> NMF is mathematically less rigorous than ADMIXTURE's binomial likelihood model —
+> ancestry proportions should be treated as **rough estimates only**.
+> For reliable results, run on a native x86-64 Linux system or inside Docker.
 
 ## Output structures
 
@@ -75,6 +82,8 @@ results/
 ├── pca_PC3_PC4.png       # PCA scatter plot (PC3 vs PC4)
 ├── admixture_K3.png      # ADMIXTURE bar chart, K=3
 ├── admixture_K5.png      # ADMIXTURE bar chart, K=5
+├── ancestry_pie_K3.png   # Ancestry pie chart, K=3
+├── ancestry_pie_K5.png   # Ancestry pie chart, K=5
 ├── cv_error.png          # CV error curve (best-K selection)
 ├── pca/
 │   ├── pca.eigenvec

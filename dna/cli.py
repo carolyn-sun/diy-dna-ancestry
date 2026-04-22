@@ -87,8 +87,16 @@ def download(out_dir: str, force: bool):
 @click.option("--maf",  default=0.01, show_default=True, help="Minimum allele frequency")
 @click.option("--hwe",  default=1e-6, show_default=True, help="Hardy-Weinberg p-value cutoff")
 @click.option("--skip-plot", is_flag=True, default=False, help="Skip the plotting step")
+@click.option(
+    "--nmf-fallback", "nmf_fallback", is_flag=True, default=False,
+    help=(
+        "Enable Python NMF as a fallback when the ADMIXTURE binary crashes "
+        "(e.g. SIGSEGV on incompatible hardware). "
+        "Results are approximate — prefer native ADMIXTURE when possible."
+    ),
+)
 def run(vcf: str, k_values: str, threads: int, out_dir: str, ref_dir: str,
-        geno: float, maf: float, hwe: float, skip_plot: bool):
+        geno: float, maf: float, hwe: float, skip_plot: bool, nmf_fallback: bool):
     """Full pipeline: QC → merge → ADMIXTURE → PCA → plots."""
     from dna.init_env import run_check
     from dna.qc import run_qc
@@ -125,10 +133,13 @@ def run(vcf: str, k_values: str, threads: int, out_dir: str, ref_dir: str,
     merged_bed = merge_with_hgdp(user_bed=user_bed, ref_dir=ref_dir, out_dir=work_dir)
 
     console.print(f"\n[bold]3 / 5  ADMIXTURE (K = {ks})[/bold]")
+    if nmf_fallback:
+        console.print("  [yellow]NMF fallback mode enabled (--nmf-fallback)[/yellow]")
     admix_results = run_admixture(
         bed=merged_bed, ks=ks,
         out_dir=os.path.join(out_dir, "admixture"),
         threads=threads,
+        allow_nmf_fallback=nmf_fallback,
     )
 
     console.print("\n[bold]4 / 5  PCA[/bold]")

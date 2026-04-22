@@ -125,7 +125,8 @@ def _run_nmf_fallback(
 # Core functions
 # ──────────────────────────────────────────────────────────────────────────────
 
-def _run_admixture_k(bed: str, k: int, out_dir: str, threads: int) -> dict:
+def _run_admixture_k(bed: str, k: int, out_dir: str, threads: int,
+                     allow_nmf_fallback: bool = False) -> dict:
     """
     Run ADMIXTURE for a single K value.
 
@@ -297,13 +298,28 @@ def _run_admixture_k(bed: str, k: int, out_dir: str, threads: int) -> dict:
             f" trying simpler invocation...[/yellow]"
         )
 
-    # If all ADMIXTURE invocations crashed (segfault), use Python NMF fallback
+    # If all ADMIXTURE invocations crashed (segfault), optionally use NMF fallback
     all_segfaulted = (proc is not None and proc.returncode < 0)
     if all_segfaulted:
-        return _run_nmf_fallback(
-            stem=stem, k=k, bed_dir=bed_dir,
-            out_path=out_path, log_path=log_path,
-        )
+        if allow_nmf_fallback:
+            console.print(
+                "  [yellow]ADMIXTURE binary crashed (SIGSEGV). "
+                "Using Python NMF fallback (--nmf-fallback is enabled).[/yellow]"
+            )
+            return _run_nmf_fallback(
+                stem=stem, k=k, bed_dir=bed_dir,
+                out_path=out_path, log_path=log_path,
+            )
+        else:
+            raise RuntimeError(
+                f"ADMIXTURE K={k} crashed with a segfault (exit {proc.returncode}).\n"
+                "This usually means the ADMIXTURE binary is incompatible with your CPU/OS.\n"
+                "Options:\n"
+                "  1. Run on a native x86-64 Linux machine or Docker container.\n"
+                "  2. Re-enable the approximate NMF fallback with --nmf-fallback\n"
+                "     (results will be less accurate than true ADMIXTURE).\n"
+                f"  Log: {log_path}"
+            )
 
     if proc.returncode != 0:
         tail = ""
@@ -400,15 +416,20 @@ def run_admixture(
     ks: list[int],
     out_dir: str,
     threads: int = 4,
+    allow_nmf_fallback: bool = False,
 ) -> dict[int, dict]:
     """
     Run ADMIXTURE for multiple K values.
 
     Args:
-        bed:     Merged BED prefix (without .bed extension)
-        ks:      List of K values, e.g. [3, 5]
-        out_dir: Output directory
-        threads: Number of threads
+        bed:               Merged BED prefix (without .bed extension)
+        ks:                List of K values, e.g. [3, 5]
+        out_dir:           Output directory
+        threads:           Number of threads
+        allow_nmf_fallback: If True, fall back to a Python NMF approximation
+                           when the ADMIXTURE binary crashes (e.g. SIGSEGV on
+                           incompatible hardware).  Disabled by default because
+                           NMF results are less accurate than true ADMIXTURE.
 
     Returns:
         Dict mapping K → result dict (q_file, cv_error, log_file, ...)
@@ -418,7 +439,10 @@ def run_admixture(
     all_results: list[dict] = []
     for k in sorted(ks):
         console.print(f"\n  [cyan]── ADMIXTURE K={k} ──────────────────────────────[/cyan]")
-        result = _run_admixture_k(bed=bed, k=k, out_dir=out_dir, threads=threads)
+        result = _run_admixture_k(
+            bed=bed, k=k, out_dir=out_dir,
+            threads=threads, allow_nmf_fallback=allow_nmf_fallback,
+        )
         all_results.append(result)
 
     _print_cv_table(all_results)
