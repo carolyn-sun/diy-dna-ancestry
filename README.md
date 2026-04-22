@@ -49,31 +49,31 @@ The following outputs are generated from a real DNA test file.
 
 ### PCA — PC1 vs PC2
 
-![PCA PC1 vs PC2](media/pca_PC1_PC2.png)
+<img src="media/pca_PC1_PC2.png" width="720">
 
 **Algorithm:** Principal Component Analysis (PCA) is run via PLINK on the merged dataset (user + ~3,000 HGDP reference individuals). Each dot is one person; axes are the top two linear dimensions of genetic variation. PC1 (51%) separates African from non-African populations; PC2 (32%) separates East Asian from European/South Asian. The white star (★) marks your sample. This plot gives a lossless map of where you sit in global genetic space.
 
 ### PCA — PC3 vs PC4
 
-![PCA PC3 vs PC4](media/pca_PC3_PC4.png)
+<img src="media/pca_PC3_PC4.png" width="720">
 
 **Algorithm:** Same PCA, viewed along PC3 (5.2%) and PC4 (3.5%). These lower-variance axes reveal finer structure — separating Native American from East Asian, and Middle Eastern from European. Because these axes capture within-Eurasian variation, they often reveal more nuanced placement than PC1/PC2 alone.
 
 ### Ancestry by PCA Proximity
 
-![Ancestry by PCA Proximity](media/pca_ancestry_knn.png)
+<img src="media/pca_ancestry_knn.png" width="500">
 
 **Algorithm:** For each of the 7 HGDP geographic regions, a **centroid** is computed as the mean PC coordinates of all reference individuals in that region. The user's ancestry proportions are estimated by **inverse-distance weighting**: each region's score is `1 / d`, where `d` is the variance-weighted Euclidean distance from the user to that region's centroid (each PC weighted by its fraction of explained variance). Scores are normalised to 100%. This method is **density-bias-free** — a region with many reference samples is not favoured over one with few, unlike KNN.
 
 ### ADMIXTURE Bar Chart (K = 7)
 
-![ADMIXTURE K=7](media/admixture_K7.png)
+<img src="media/admixture_K7.png" width="720">
 
 **Algorithm:** ADMIXTURE fits a binomial likelihood model assuming `K` discrete ancestral populations. Each bar represents one individual; coloured segments show the proportion of ancestry from each of the `K` inferred components. Individuals are sorted by geographic region. The user's bar (★) shows which global components contribute to their genome. K = 7 is used here because it matches the 7 HGDP geographic super-regions, giving the cleanest component-to-region correspondence.
 
 ### Ancestry Pie Chart (best K by CV error)
 
-![Ancestry Pie K=7](media/ancestry_pie_K7.png)
+<img src="media/ancestry_pie_K7.png" width="480">
 
 **Algorithm:** After ADMIXTURE runs at multiple K values, the K with the **lowest cross-validation (CV) error** is selected automatically. The pie chart is generated only for that best K. Each ADMIXTURE component is mapped to geographic regions using **soft assignment**: the component's mean Q-values across reference populations are used as weights, so a component that loads on multiple regions is split proportionally rather than hard-assigned to a single winner.
 
