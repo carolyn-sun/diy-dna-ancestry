@@ -38,8 +38,11 @@ def _run_nmf_fallback(
     on this Linux host).  Results closely approximate ADMIXTURE output.
     """
     console.print(
-        f"  [yellow]⚠  ADMIXTURE binary crashed (SIGSEGV) on every invocation.\n"
-        f"     Falling back to Python NMF ancestry estimation (K={k}).[/yellow]"
+        f"  [bold red]⚠ ADMIXTURE binary crashed (SIGSEGV) — falling back to NMF (K={k}).[/bold red]\n"
+        "  [red]NMF is a rough mathematical approximation and may produce SIGNIFICANTLY\n"
+        "  INACCURATE ancestry proportions. Do NOT use these results for any serious\n"
+        "  interpretation. Fix the crash first: run 'ulimit -s unlimited' in your shell\n"
+        "  before launching dna run.[/red]"
     )
 
     # ── Convert BED → .raw (additive 0/1/2 coding) via PLINK ─────────────────

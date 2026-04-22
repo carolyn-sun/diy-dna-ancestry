@@ -21,7 +21,6 @@ bash setup.sh
 conda activate dna-ancestry
 ```
 
-
 ## Pipelines
 
 ```mermaid
@@ -55,29 +54,33 @@ dna run --vcf FILE [options]          # run the full pipeline
 dna plot --results DIR                # re-plot from existing results
 ```
 
-| Flag               | Default      | Description                                                    |
-| ------------------ | ------------ | -------------------------------------------------------------- |
-| `--vcf`            | _(required)_ | Input VCF file                                                 |
-| `--k`              | `3,5`        | ADMIXTURE K values, comma-separated                            |
-| `--threads`        | `4`          | Parallel threads                                               |
-| `--out`            | `results/`   | Output directory                                               |
-| `--geno`           | `0.05`       | Genotype missingness threshold                                 |
-| `--maf`            | `0.01`       | Minimum allele frequency                                       |
-| `--hwe`            | `1e-6`       | Hardy–Weinberg p-value cutoff                                  |
-| `--skip-plot`      | —            | Skip the plotting step                                         |
-| `--nmf-fallback`   | —            | Enable NMF approximation if ADMIXTURE crashes (see note below) |
-| `--admixture-bin`  | `admixture`  | Path to ADMIXTURE executable (override for non-default installs) |
+| Flag              | Default      | Description                                                      |
+| ----------------- | ------------ | ---------------------------------------------------------------- |
+| `--vcf`           | _(required)_ | Input VCF file                                                   |
+| `--k`             | `3,5`        | ADMIXTURE K values, comma-separated                              |
+| `--threads`       | `4`          | Parallel threads                                                 |
+| `--out`           | `results/`   | Output directory                                                 |
+| `--geno`          | `0.05`       | Genotype missingness threshold                                   |
+| `--maf`           | `0.01`       | Minimum allele frequency                                         |
+| `--hwe`           | `1e-6`       | Hardy–Weinberg p-value cutoff                                    |
+| `--skip-plot`     | —            | Skip the plotting step                                           |
+| `--nmf-fallback`  | —            | Enable NMF approximation if ADMIXTURE crashes (see note below)   |
+| `--admixture-bin` | `admixture`  | Path to ADMIXTURE executable (override for non-default installs) |
 
 > [!WARNING]
 > If ADMIXTURE crashes with a **segfault (SIGSEGV)**, the most common cause is the
 > default stack size limit being too small. Try running with an unlimited stack first:
+>
 > ```bash
 > ulimit -s unlimited
 > dna run --vcf your.vcf --k 3,5
 > ```
-> If the crash persists, use `--nmf-fallback` as a workaround — this enables a
-> **Python NMF approximation** which is less rigorous than true ADMIXTURE.
-> NMF ancestry proportions should be treated as **rough estimates only**.
+>
+> If the crash persists, `--nmf-fallback` is available as a last resort.
+> **However, NMF results may be significantly inaccurate** — NMF is a rough
+> mathematical approximation that does not model the binomial likelihood of SNP
+> data the way ADMIXTURE does. Ancestry proportions from NMF can be misleading
+> and should **not** be used for any serious interpretation.
 
 ## Output structures
 
@@ -126,6 +129,10 @@ pytest tests/ -v
 ## Further steps
 
 For the detailed gene mutation analysis, you can play with [OpenCRAVAT](https://opencravat.org/).
+
+## TODO
+
+- [ ] Optional replacement: fastSTRUCTURE
 
 ## License
 

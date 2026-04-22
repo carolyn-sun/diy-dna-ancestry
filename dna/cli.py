@@ -143,7 +143,13 @@ def run(vcf: str, k_values: str, threads: int, out_dir: str, ref_dir: str,
 
     console.print(f"\n[bold]3 / 5  ADMIXTURE (K = {ks})[/bold]")
     if nmf_fallback:
-        console.print("  [yellow]NMF fallback mode enabled (--nmf-fallback)[/yellow]")
+        console.print(
+            "\n  [bold red]⚠ WARNING: NMF FALLBACK MODE ENABLED[/bold red]\n"
+            "  [red]NMF is a rough mathematical approximation of ADMIXTURE.\n"
+            "  Ancestry proportions may be SIGNIFICANTLY INACCURATE —\n"
+            "  do NOT use these results for any serious interpretation.\n"
+            "  Fix the ADMIXTURE crash first (see: ulimit -s unlimited).[/red]"
+        )
     if admixture_bin != "admixture":
         console.print(f"  [dim]ADMIXTURE binary: {admixture_bin}[/dim]")
     admix_results = run_admixture(
